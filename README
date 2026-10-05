@@ -4,11 +4,12 @@ raspdash
 A full-screen terminal dashboard for a Raspberry Pi.  It shows:
 
   1. Machines   -- load, memory and temperatures of the computers on the LAN
-  2. Network    -- devices on the LAN and the services they offer
-  3. Tasks      -- Google Tasks lists (read-only)
-  4. Timetable  -- this week's classes from ruz.spbstu.ru
-  5. Weather    -- forecasts from MET Norway for configured cities
-  6-8. Markets  -- month and half-year candlestick charts (XAUT/USDT, TON/USDT;
+  2. Uptime     -- uptime and boots of those computers, last power cut
+  3. Network    -- devices on the LAN and the services they offer
+  4. Tasks      -- Google Tasks lists (read-only)
+  5. Timetable  -- this week's classes from ruz.spbstu.ru
+  6. Weather    -- forecasts from MET Norway for configured cities
+  7-9. Markets  -- month and half-year candlestick charts (XAUT/USDT, TON/USDT;
                    BTC/USD, USD/RUB) and a comparison chart
 
 Building from a git checkout:

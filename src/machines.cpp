@@ -423,8 +423,6 @@ run_command (const std::vector<std::string> &argv, std::string_view input,
 
 namespace
 {
-enum class Kind { local, ssh, keenetic };
-
 struct HostConfig
 {
     std::string name;
@@ -444,6 +442,8 @@ struct Snapshot
 {
     Stats stats;
     std::vector<double> cpu_history;
+    util::TimePoint taken{};
+    steady_clock::time_point taken_steady{};
 };
 
 std::string
@@ -494,7 +494,7 @@ protected:
                 Stats f = parse_stats (c->body);
                 if (cfg_.kind == Kind::keenetic)
                     f.os = util::trim (f.os).empty () ? "KeeneticOS" : f.os;
-                snapshot.set (Snapshot{std::move (f), {}});
+                snapshot.set (Snapshot{std::move (f), {}, {}, {}});
                 facts_ = c->body;
             }
         return std::nullopt;
@@ -531,7 +531,8 @@ protected:
             }
         snapshot.set (Snapshot{std::move (s), {history_.begin (),
                                                history_.end ()
-                                              }
+                                              },
+                               util::Clock::now (), steady_clock::now ()
                               });
     }
 
@@ -1197,61 +1198,125 @@ load_script (const Config &cfg, const toml::table &t)
 }
 }
 
+namespace machines
+{
+namespace
+{
+struct Registry
+{
+    std::vector<MachinesScreen::Card> cards;
+    std::vector<Host> hosts;
+};
+
+std::unique_ptr<Registry>
+make_registry (App &app)
+{
+    const Config &cfg = app.config ();
+    const toml::table &table = cfg.section ("machines");
+
+    auto script = load_script (cfg, table);
+    seconds interval{table["interval"].value_or (10)};
+    milliseconds timeout{static_cast<long> (table["timeout"].value_or (15.0)
+                                            * 1000)};
+    std::size_t history = static_cast<std::size_t> (table["history"].value_or (120));
+    std::string identity = table["ssh_identity"].value_or<std::string> ("");
+
+    auto registry = std::make_unique<Registry> ();
+    const toml::array *hosts = table["hosts"].as_array ();
+    if (hosts)
+        for (const toml::node &node : *hosts)
+            {
+                const toml::table *entry = node.as_table ();
+                if (!entry)
+                    throw std::runtime_error ("[[machines.hosts]] entries must be "
+                                              "tables");
+                HostConfig hc;
+                hc.name = (*entry)["name"].value_or<std::string> ("");
+                hc.address = (*entry)["address"].value_or<std::string> ("");
+                if (hc.name.empty ())
+                    hc.name = hc.address.empty () ? "?" : hc.address;
+                hc.kind = parse_kind ((*entry)["kind"].value_or<std::string> ("ssh"),
+                                      hc.name);
+                hc.user = (*entry)["user"].value_or<std::string> ("");
+                hc.port = (*entry)["port"].value_or (0);
+                std::string id = (*entry)["identity"].value_or<std::string> (std::string (identity));
+                if (!id.empty ())
+                    hc.identity = cfg.resolve (id).string ();
+                if (const toml::array *opts = (*entry)["ssh_options"].as_array ())
+                    for (const toml::node &option : *opts)
+                        if (auto text = option.value<std::string> ())
+                            hc.ssh_options.push_back (*text);
+                if (auto credentials = (*entry)["credentials"].value<std::string> ())
+                    {
+                        hc.credentials = cfg.resolve (*credentials);
+                        hc.credentials_name = *credentials;
+                    }
+                hc.interval = seconds{(*entry)["interval"].value_or (interval.count ())};
+                hc.timeout = timeout;
+                if (auto limit = (*entry)["timeout"].value<double> ())
+                    hc.timeout = milliseconds{static_cast<long> (*limit * 1000)};
+
+                bool configured = hc.kind == Kind::local || !hc.address.empty ();
+                HostSource *src = nullptr;
+                if (configured && (*entry)["enabled"].value_or (true))
+                    src = &app.add_source (std::make_unique<HostSource> (hc, script,
+                                           history));
+                Host host{hc.name, hc.kind, hc.address, src, {}};
+                if (src)
+                    host.read = [src]
+                    {
+                        auto snap = src->snapshot.get ();
+                        if (!snap)
+                            return Reading{};
+                        return Reading{std::shared_ptr<const Stats> (snap, &snap->stats),
+                                       snap->taken, snap->taken_steady};
+                    };
+                else
+                    host.read = []
+                    {
+                        return Reading{};
+                    };
+                registry->hosts.push_back (std::move (host));
+                registry->cards.push_back ({std::move (hc), src});
+            }
+    return registry;
+}
+
+Registry &
+registry (App &app)
+{
+    return app.shared<Registry> ("machines", [&app]
+    {
+        return make_registry (app);
+    });
+}
+}
+
+const std::vector<Host> &
+hosts (App &app)
+{
+    return registry (app).hosts;
+}
+
+std::string_view
+kind_name (Kind kind)
+{
+    switch (kind)
+        {
+        case Kind::local:
+            return "local";
+        case Kind::ssh:
+            return "ssh";
+        case Kind::keenetic:
+            return "keenetic";
+        }
+    return "?";
+}
+}
+
 void
 install_machines (App &app)
 {
     using namespace machines;
-    const Config &cfg = app.config ();
-    const toml::table &t = cfg.section ("machines");
-
-    auto script = load_script (cfg, t);
-    seconds interval{t["interval"].value_or (10)};
-    milliseconds timeout{static_cast<long> (t["timeout"].value_or (15.0)
-                                            * 1000)};
-    std::size_t history = static_cast<std::size_t> (t["history"].value_or (120));
-    std::string identity = t["ssh_identity"].value_or<std::string> ("");
-
-    std::vector<MachinesScreen::Card> cards;
-    const toml::array *hosts = t["hosts"].as_array ();
-    if (hosts)
-        for (const toml::node &node : *hosts)
-            {
-                const toml::table *h = node.as_table ();
-                if (!h)
-                    throw std::runtime_error ("[[machines.hosts]] entries must be "
-                                              "tables");
-                HostConfig hc;
-                hc.name = (*h)["name"].value_or<std::string> ("");
-                hc.address = (*h)["address"].value_or<std::string> ("");
-                if (hc.name.empty ())
-                    hc.name = hc.address.empty () ? "?" : hc.address;
-                hc.kind = parse_kind ((*h)["kind"].value_or<std::string> ("ssh"),
-                                      hc.name);
-                hc.user = (*h)["user"].value_or<std::string> ("");
-                hc.port = (*h)["port"].value_or (0);
-                std::string id = (*h)["identity"].value_or<std::string> (std::string (identity));
-                if (!id.empty ())
-                    hc.identity = cfg.resolve (id).string ();
-                if (const toml::array *opts = (*h)["ssh_options"].as_array ())
-                    for (const toml::node &o : *opts)
-                        if (auto s = o.value<std::string> ())
-                            hc.ssh_options.push_back (*s);
-                if (auto c = (*h)["credentials"].value<std::string> ())
-                    {
-                        hc.credentials = cfg.resolve (*c);
-                        hc.credentials_name = *c;
-                    }
-                hc.interval = seconds{(*h)["interval"].value_or (interval.count ())};
-                hc.timeout = timeout;
-                if (auto to = (*h)["timeout"].value<double> ())
-                    hc.timeout = milliseconds{static_cast<long> (*to * 1000)};
-
-                bool configured = hc.kind == Kind::local || !hc.address.empty ();
-                HostSource *src = nullptr;
-                if (configured && (*h)["enabled"].value_or (true))
-                    src = &app.add_source (std::make_unique<HostSource> (hc, script,
-                                           history));
-                cards.push_back ({std::move (hc), src});
-            }
-    app.add_screen (std::make_unique<MachinesScreen> (std::move (cards)));
+    app.add_screen (std::make_unique<MachinesScreen> (registry (app).cards));
 }

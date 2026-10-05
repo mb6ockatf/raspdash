@@ -1,0 +1,175 @@
+@c uptime.texi -- the Uptime screen.
+@c Copyright (C) 2026 mb6ockatf
+@c This file is part of the raspdash manual; see raspdash.texi for the
+@c copying conditions.
+
+@node Uptime
+@chapter Uptime
+@cindex uptime
+@cindex boot history
+@cindex power cut
+
+The @dfn{Uptime} screen shows how long each machine of the
+@code{[machines]} table has been running and when the electricity last
+went out.  It has two parts.
+
+The upper frame is a table with one row per configured host: a status
+dot (green when the host answers, red when it does not, grey while it
+is first being asked or when it is not polled at all), its name, its
+kind, its address, its uptime (@samp{up 14h 8m}, or @samp{down 3m} with
+the time since it last answered), its last boot in local time
+(@samp{booted Mon 05 Oct 06:38}) and the number of boots in the period
+the timeline covers.  The timeline at the right covers the last seven
+days, one column per slice of time, with the day names on the header
+line: @samp{━} while the host was up, @samp{┃} in yellow at a boot,
+@samp{┃} in red at a boot that belongs to a power cut, @samp{╌} after a
+host that no longer answers was last heard from, and dots where nothing
+is known.  On a narrow terminal the kind and then the address columns
+make room for the timeline.
+
+The lower frame, @samp{Power}, starts with the last power cut:
+
+@example
+Last power cut: Mon 05 Oct 06:36 (router, hppavillion restarted), 14h ago
+@end example
+
+@noindent
+and, when some answering host booted before it, which hosts kept
+running through it (a Pi on a UPS, for example).  Below are two lists:
+the power cuts found, newest first, and every recorded boot, with the
+ones that belong to a power cut marked.
+
+The screen does not poll the hosts itself: it reads the snapshots of
+the Machines screen's sources (@pxref{Machines}).  Hosts are polled
+once even when both screens are shown, in whichever order
+@code{[app] screens} lists them; with only @samp{uptime} listed, the
+hosts are still polled with the @code{[machines]} settings.
+
+@menu
+* Detecting power cuts::
+* Uptime configuration::
+* Uptime internals::
+@end menu
+
+@node Detecting power cuts
+@section How power cuts are detected
+@cindex power cut, detection
+
+Every host reports its uptime.  The time of the poll minus the uptime
+is the time the host booted.  raspdash records every new boot in a
+@dfn{boot history} that is kept in the cache directory, so it survives
+restarts and grows over weeks; the last 50 boots of each host are kept.
+Two boot times of the same host less than three minutes apart are the
+same boot, which absorbs the few seconds a poll takes.  When raspdash
+starts without a history, the first answer of each host already gives
+its current boot, so the screen shows the last power cut at once if
+the hosts were restarted by it.
+
+A power cut restarts several machines at nearly the same time, while a
+reboot by hand or after an update restarts one.  The boots of all hosts
+are therefore sorted by time and grouped: a group starts at the
+earliest boot not yet grouped and takes every boot of another host
+within the next ten minutes.  A group is a @dfn{likely power cut}, dated
+at its earliest boot, when
+
+@itemize
+@item
+it contains a boot of the router (a host of kind @code{keenetic}),
+since a router practically only restarts when it loses power; or
+@item
+it contains boots of at least two hosts, and at least one of them has
+no battery.
+@end itemize
+
+A machine with a battery (one whose statistics include a battery
+charge) rides out a power cut, so its boots count only together with
+others: two laptops that restart together, for an update for example,
+are not a power cut, but a laptop that restarts with the Pi is.  A
+single machine without a battery that restarts alone is not counted
+either, because it was more likely restarted on purpose.
+
+@cindex clock, Pi without RTC
+A Raspberry Pi has no battery-backed clock.  After a power cut it starts
+with the time it saved at shutdown and corrects it once NTP answers,
+which may be minutes later.  Boot times computed before the correction
+are wrong by the size of the jump, so raspdash does not trust the wall
+clock alone: it remembers each host's last uptime together with the
+time of the Pi's monotonic clock.  When the uptime has grown by as much
+as the monotonic time (give or take two minutes), the host has not
+restarted, and a boot time that moved is corrected in place instead of
+being recorded as a new boot.  A boot recorded with the wrong clock in
+the minutes before the correction is therefore fixed rather than
+duplicated.  The first answers after raspdash starts have nothing to
+compare with and are matched by time only.
+
+@node Uptime configuration
+@section Configuration
+
+All keys are optional.
+
+@example
+[uptime]
+interval = 60
+days = 7
+keep = 50
+same_boot_minutes = 3
+window_minutes = 10
+# timezone = "Europe/Moscow"
+@end example
+
+@table @code
+@item interval
+Seconds between updates of the saved boot history.  Default 60.  The
+screen itself always uses the newest host snapshots.
+@item days
+How many days the timeline covers.  Default 7.
+@item keep
+Boots kept per host.  Default 50.
+@item same_boot_minutes
+Boot times of one host closer than this are the same boot.  Default 3.
+@item window_minutes
+How close the boots of different hosts must be to count as one power
+cut.  Default 10.
+@item timezone
+The time zone for the boot times and the day names of the timeline.
+Default: the system's time zone.
+@end table
+
+@node Uptime internals
+@section Internals
+
+@file{src/uptime.cpp} holds the source and the screen; the history and
+the clustering are pure functions declared in @file{src/uptime.hpp} and
+tested by @file{tests/test_uptime.cpp}.
+
+@code{machines::hosts} gives the configured hosts (@pxref{Machines
+internals}).  Each @code{machines::Reading} carries the host's
+@code{Stats} and the wall-clock and monotonic times of the poll.
+
+@code{BootSource} (named @samp{uptime}) holds a @code{History}, a map
+from host name to @code{HostHistory}: the host's kind, whether it has
+a battery, its boots in ascending order, and its last
+@code{Observation} (wall time, monotonic time and uptime; kept in
+memory only).  Each @code{fetch} applies the latest reading of every
+host with @code{observe}, publishes the result, and writes
+@file{uptime-history} to the cache directory (JSON, boot times as Unix
+seconds) when a boot, kind or battery flag changed.  It never fails.
+@code{restore} loads the file; @code{fetch} loads it too when it runs
+first, as with @option{--check}.
+
+@code{observe} decides whether an observation is the same boot as the
+last one (uptime grown by the elapsed monotonic time, with a two-minute
+slack) and then either corrects the latest boot when it moved by more
+than @code{same_boot}, or adds the boot unless a recorded one is within
+@code{same_boot}.  The boots are then sorted, neighbours within
+@code{same_boot} merged, and the oldest dropped beyond @code{keep}.
+
+@code{power_events} groups the boots of all hosts as described above
+and returns the power cuts newest first, each with its boots in time
+order; @code{event_hosts} names them.  @code{timeline} turns a host's
+boots, the boots that belong to a power cut, the time it was last seen
+and whether it answers now into one @code{Cell} per column.
+
+The screen applies the current readings to a copy of the history on
+every redraw, so a boot shows up as soon as a host answers, without
+waiting for the source's interval.

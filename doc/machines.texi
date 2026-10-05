@@ -250,6 +250,18 @@ answers).  Hosts without an address get no source at all.  The screen
 decides on every redraw which hosts to show: those with a source whose
 status carries no error.
 
+A @code{Snapshot} also records when it was taken, by the wall clock and
+by the monotonic clock, so that the Uptime screen can turn the uptime
+into a boot time (@pxref{Uptime internals}).  The hosts and their
+sources are created only once per application by
+@code{machines::hosts}, which keeps them in the @code{App}'s shared
+slot @samp{machines}; @code{install_machines} and @code{install_uptime}
+both call it, so the two screens poll each host once between them,
+whatever their order in @code{[app] screens}.  @code{machines::Host} is
+the public view of a host: its name, kind, address, source (null when
+the host is not polled) and a @code{read} function returning the latest
+@code{Reading}.
+
 @code{restore()} reloads only the cached @samp{facts} (an
 @samp{agent=1} text with hostname, os, kernel and ncpu), publishes them
 as a snapshot without measurements, and returns @code{nullopt}, so the

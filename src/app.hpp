@@ -20,6 +20,7 @@
 #pragma once
 
 #include <chrono>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -50,6 +51,16 @@ public:
 
     void add_screen (std::unique_ptr<Screen> s);
 
+    template <typename T, typename Make>
+    T &
+    shared (const std::string &key, Make make)
+    {
+        std::shared_ptr<void> &slot = shared_[key];
+        if (!slot)
+            slot = std::shared_ptr<T> (make ());
+        return *static_cast<T *> (slot.get ());
+    }
+
     int run (std::string_view start_screen = {});
 
     int check ();
@@ -64,6 +75,7 @@ private:
     const Config &cfg_;
     std::vector<std::unique_ptr<Source>> sources_;
     std::vector<std::unique_ptr<Screen>> screens_;
+    std::map<std::string, std::shared_ptr<void>> shared_;
     std::size_t current_ = 0;
     bool clear_pending_ = false;
 

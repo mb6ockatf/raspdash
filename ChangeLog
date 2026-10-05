@@ -1,5 +1,19 @@
 2026-10-05  mb6ockatf
 
+	* src/uptime.cpp, src/uptime.hpp: New Uptime screen: each host's
+	uptime, last boot and a seven-day boot timeline, and the last power
+	cut, deduced from hosts that restarted together (or the router
+	restarting).  The boot history is kept in the cache directory.
+	* tests/test_uptime.cpp: New.
+	* src/modules.hpp: Register it.
+	* src/machines.cpp, src/machines.hpp (Kind): Move to the header.
+	(Host, Reading, hosts, kind_name): New.
+	(Snapshot): Record when it was taken.
+	(install_machines): Take the hosts from hosts, which creates their
+	sources once for both screens.
+	* src/app.hpp (App::shared): New.
+	* Makefile.am, config.example.toml, README, doc/uptime.texi,
+	doc/raspdash.texi, doc/machines.texi: Document and build them.
 	* src/markets.cpp, src/markets.hpp: Candlestick charts (style),
 	fast and slow moving averages (moving_averages), the changes over
 	24 hours, 7 days, 30 days and 6 months, and a Compare screen with

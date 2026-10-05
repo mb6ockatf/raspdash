@@ -47,8 +47,9 @@ General Public License for more details.
 @top raspdash
 
 raspdash shows, on a terminal filling the Pi's screen, the state of the
-machines on the local network, Google Tasks lists, the week's university
-timetable, weather forecasts and market charts.
+machines on the local network, their uptime and the power cuts they
+went through, Google Tasks lists, the week's university timetable,
+weather forecasts and market charts.
 
 @insertcopying
 @end ifnottex
@@ -61,11 +62,12 @@ timetable, weather forecasts and market charts.
 * Configuration::               The @file{config.toml} file.
 * Secrets::                     Credentials and tokens.
 * Machines::                    Screen 1: computers on the network.
-* Network::                     Screen 2: devices and services on the LAN.
-* Tasks::                       Screen 3: Google Tasks.
-* Timetable::                   Screen 4: ruz.spbstu.ru timetable.
-* Weather::                     Screen 5: forecasts.
-* Markets::                     Screens 6 to 8: price charts.
+* Uptime::                      Screen 2: uptime, boots and power cuts.
+* Network::                     Screen 3: devices and services on the LAN.
+* Tasks::                       Screen 4: Google Tasks.
+* Timetable::                   Screen 5: ruz.spbstu.ru timetable.
+* Weather::                     Screen 6: forecasts.
+* Markets::                     Screens 7 to 9: price charts.
 * Development::                 Hacking on raspdash.
 * Copying::                     The license.
 * Concept Index::               Index of concepts.
@@ -80,13 +82,17 @@ with ncurses.  On the Pi it runs inside a full-screen alacritty window
 that the X session starts after automatic login (@pxref{Installing on the
 Pi}).
 
-The dashboard has six kinds of @dfn{screens}, shown one at a time (the
-markets take two tabs, so there are seven):
+The dashboard has seven kinds of @dfn{screens}, shown one at a time (the
+markets take three tabs, so there are nine):
 
 @enumerate
 @item
 @strong{Machines}: load, CPU, memory, disks and temperatures of the
 computers on the local network and of the router.
+@item
+@strong{Uptime}: how long each of those machines has been running, its
+recent boots over the last week, and the power cuts deduced from
+machines restarting together.
 @item
 @strong{Network}: the devices on the local network and the services
 (SSH, HTTP, @dots{}) each one offers, found by a port scan.
@@ -124,6 +130,7 @@ only when its data is older than that:
 @multitable @columnfractions .3 .3 .4
 @headitem Screen @tab Default interval @tab Also fetched when
 @item Machines @tab 10 seconds @tab ---
+@item Uptime @tab 1 minute @tab ---
 @item Network @tab 10 minutes @tab ---
 @item Tasks @tab 1 hour @tab ---
 @item Timetable @tab 3 days @tab a new week starts
@@ -499,6 +506,7 @@ The router's login (@pxref{Machines}).
 @end table
 
 @include machines.texi
+@include uptime.texi
 @include network.texi
 @include tasks.texi
 @include timetable.texi
@@ -661,7 +669,11 @@ second and must not block; an exception from it is shown in place of
 the screen.
 
 @code{App} owns the sources and screens.  @code{add_source} returns a
-typed reference so a screen can keep it.  @code{run} starts every
+typed reference so a screen can keep it.  @code{shared<T> (@var{key},
+@var{make})} returns an object that several modules share, creating it
+with @var{make} on first use; it lives as long as the application.  The
+Machines and Uptime screens use it for the host sources.  @code{run}
+starts every
 source, then loops: draw the header (tabs and clock), the current
 screen and the footer; wait up to 250 ms for a key; rotate when due.
 SIGINT, SIGTERM and SIGHUP end the loop cleanly.  @code{check} runs

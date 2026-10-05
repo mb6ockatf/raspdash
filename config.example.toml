@@ -9,7 +9,7 @@
 
 [app]
 # Screens in tab order.  Remove one to hide it.
-screens = ["machines", "network", "tasks", "timetable", "weather", "markets"]
+screens = ["machines", "uptime", "network", "tasks", "timetable", "weather", "markets"]
 # Switch to the next screen every N seconds (0 = never).
 rotate_seconds = 60
 # After a key press, stop rotating for N seconds.
@@ -56,6 +56,21 @@ name = "router"
 kind = "keenetic"
 address = "192.168.1.1"
 credentials = "secrets/keenetic.toml"   # login = "...", password = "..."
+
+[uptime]
+# The Uptime screen reads the [machines] hosts; it polls nothing itself.
+# Seconds between saves of the boot history to the cache directory.
+interval = 60
+# Days covered by the boot timeline.
+days = 7
+# Boots remembered per host.
+keep = 50
+# Boot times of one host closer than this many minutes are one boot.
+same_boot_minutes = 3
+# Boots of several hosts within this many minutes are one power cut.
+window_minutes = 10
+# Time zone for boot times (default: the system's).
+# timezone = "Europe/Moscow"
 
 [tasks]
 # Titles of the Google Tasks lists to show, in this order.  Leave the
