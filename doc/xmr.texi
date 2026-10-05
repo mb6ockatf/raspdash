@@ -33,7 +33,7 @@ daily volatility over the period.
 
 @item Network
 The block height, difficulty and network hash rate (difficulty divided
-by the 120-second block target), the average time between the last 15
+by the 120-second block target), the average time between the last 12
 blocks (yellow above three minutes), the age of the newest block (yellow
 after ten minutes), average fees per block and per transaction, the
 current block reward, the transaction pool, the total number of
@@ -41,7 +41,7 @@ transactions, the hard-fork version and the median block size.  It comes
 from the block explorer at @uref{https://xmrchain.net}.
 
 @item Recent blocks
-The last 15 blocks, as many as fit: height, age, number of
+The last 12 blocks, as many as fit: height, age, number of
 transactions (the coinbase not counted), size and the fees they paid.
 
 @item P2Pool
@@ -202,7 +202,8 @@ or @samp{coins/monero/market_chart?vs_currency=usd&days=30} from
 CoinGecko.  They are parsed by the Markets screen's parsers
 (@pxref{Markets}) and cut to the last 30 days.
 @item Network
-@samp{/api/networkinfo} and @samp{/api/transactions?limit=15} of the
+@samp{/api/networkinfo} and @samp{/api/transactions?limit=12} (with a 60-second timeout, since
+the answer is about 150 kB) of the
 explorer.  @samp{difficulty} arrives as a string.  The transaction list
 leaves out each block's coinbase, so the per-block reward is not in it;
 the reward shown is P2Pool's @samp{mainchain.reward}, or 0.6 XMR plus

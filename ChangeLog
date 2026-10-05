@@ -1,5 +1,7 @@
 2026-10-05  mb6ockatf
 
+	* src/xmr.cpp (NetworkSource::fetch): Ask for 12 blocks with a
+	60-second timeout; 15 timed out on the Pi.
 	* src/app.cpp (App::run): Key 0 shows the tenth screen.
 	* doc/raspdash.texi (Keys): Document it.
 	* src/xmr.cpp, src/xmr.hpp: New XMR screen: Monero market data from

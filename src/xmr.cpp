@@ -594,7 +594,14 @@ protected:
         cache_put ("networkinfo.json", info_body);
         info.set ({std::move (parsed_info), util::Clock::now ()});
 
-        std::string blocks_body = http::get (explorer_ + "/api/transactions?limit=15");
+        http::Request blocks_request;
+        blocks_request.url = explorer_ + "/api/transactions?limit=12";
+        blocks_request.timeout = seconds{60};
+        http::Response blocks_response = http::perform (blocks_request);
+        if (!blocks_response.ok ())
+            throw http::Error (std::format ("HTTP {} from {}", blocks_response.status,
+                                            blocks_request.url));
+        std::string blocks_body = std::move (blocks_response.body);
         std::vector<Block> parsed_blocks = parse_blocks (blocks_body);
         cache_put ("blocks.json", blocks_body);
         blocks.set ({std::move (parsed_blocks), util::Clock::now ()});
