@@ -1,5 +1,7 @@
 2026-10-05  mb6ockatf
 
+	* src/app.cpp (App::run): Key 0 shows the tenth screen.
+	* doc/raspdash.texi (Keys): Document it.
 	* src/xmr.cpp, src/xmr.hpp: New XMR screen: Monero market data from
 	CoinGecko, a 30-day price chart from Kraken (CoinGecko as fallback),
 	network state and recent blocks from xmrchain.net, P2Pool main, mini

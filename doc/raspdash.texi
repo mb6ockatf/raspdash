@@ -401,7 +401,8 @@ Without @option{--config}, raspdash uses the first of these that exists:
 
 @table @kbd
 @item 1 @dots{} 9
-Show that screen.
+@itemx 0
+Show that screen; @kbd{0} shows the tenth.
 @item @key{RIGHT}
 @itemx @key{TAB}
 @itemx @key{SPC}

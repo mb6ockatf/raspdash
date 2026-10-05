@@ -143,8 +143,8 @@ void
 App::draw_footer (util::TimePoint now)
 {
     int y = LINES - 1;
-    std::string help = allow_quit_ ? "←/→ 1-9 screens  r refresh  q quit"
-                       : "←/→ 1-9 screens  r refresh";
+    std::string help = allow_quit_ ? "←/→ 0-9 screens  r refresh  q quit"
+                       : "←/→ 0-9 screens  r refresh";
     int hw = tui::width (help);
     int limit = COLS - 1;
     if (COLS - hw - 1 > 40)
@@ -280,6 +280,8 @@ App::run (std::string_view start_screen)
                     else if (ch >= '1' && ch <= '9'
                              && static_cast<std::size_t> (ch - '1') < screens_.size ())
                         select (static_cast<std::size_t> (ch - '1'));
+                    else if (ch == '0' && screens_.size () >= 10)
+                        select (9);
                     else if (ch == KEY_RIGHT || ch == '\t' || ch == ' ' || ch == 'l')
                         select (current_ + 1);
                     else if (ch == KEY_LEFT || ch == KEY_BTAB || ch == 'h')
