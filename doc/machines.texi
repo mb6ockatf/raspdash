@@ -15,7 +15,9 @@ system usage, temperatures and battery charge.  Each host is polled on
 its own thread, so a host that is switched off never delays the others.
 Only hosts that answer get a card: a host whose last poll failed is
 left out, and the remaining cards share the whole screen, the last row
-stretching across the full width.  The host comes back as soon as it
+stretching across the full width.  Three or more cards are laid out in
+(at least) two rows when the screen is 24 or more lines tall, so the
+cards are not squeezed into one tall, narrow row.  The host comes back as soon as it
 answers again.  When no host answers, the screen lists the offline
 ones by name.
 

@@ -834,6 +834,8 @@ public:
         int count = static_cast<int> (shown.size ());
         int max_columns = std::clamp (area.w / 38, 1, count);
         int row_count = (count + max_columns - 1) / max_columns;
+        if (count >= 3 && row_count < 2 && area.h >= 24)
+            row_count = 2;
         int column_count = (count + row_count - 1) / row_count;
         std::vector<tui::Rect> row_rects = area.rows (row_count, 0);
         for (int index = 0; index < count; ++index)

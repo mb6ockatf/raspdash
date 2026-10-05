@@ -1,3 +1,9 @@
+2026-10-06  mb6ockatf
+
+	* src/machines.cpp (MachinesScreen::draw): Use two rows for three
+	or more cards.
+	* doc/machines.texi: Document it.
+
 2026-10-05  mb6ockatf
 
 	Drop the XMR sources that the Pi's network blocks.
