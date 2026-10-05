@@ -1,0 +1,9 @@
+raspdash THANKS file
+
+raspdash builds on the work of these projects and services:
+
+  toml++ by Mark Gillard (third_party/toml.hpp, MIT license)
+  nlohmann/json by Niels Lohmann
+  ncurses, libcurl, OpenSSL
+  ruz.spbstu.ru -- Peter the Great St. Petersburg Polytechnic University
+  MET Norway (api.met.no) -- weather forecasts, CC BY 4.0

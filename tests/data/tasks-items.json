@@ -1,0 +1,83 @@
+{
+  "kind": "tasks#tasks",
+  "etag": "\"LTE5OTk5OTk5OQ\"",
+  "nextPageToken": "CiAKGjBpNDd2Nmp2Zml2cXRwYjBpOXA",
+  "items": [
+    {
+      "kind": "tasks#task",
+      "id": "c3ViLXRhc2stMg",
+      "etag": "\"LTI1MDAwMDAwMA\"",
+      "title": "Read chapter 3",
+      "updated": "2026-10-04T10:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/lists/Ry1Lb0VhWlN0VWpIdXhPQQ/tasks/c3ViLXRhc2stMg",
+      "parent": "dG9wLXRhc2stMQ",
+      "position": "00000000000000000001",
+      "status": "needsAction",
+      "links": [],
+      "webViewLink": "https://tasks.google.com/task/c3ViLXRhc2stMg"
+    },
+    {
+      "kind": "tasks#task",
+      "id": "dG9wLXRhc2stMg",
+      "etag": "\"LTI2MDAwMDAwMA\"",
+      "title": "Курсовой проект: языки программирования",
+      "updated": "2026-10-04T11:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/lists/Ry1Lb0VhWlN0VWpIdXhPQQ/tasks/dG9wLXRhc2stMg",
+      "position": "00000000000000000001",
+      "notes": "Отчёт и презентация\nсдать Орлу Е. М.",
+      "status": "needsAction",
+      "due": "2026-10-07T00:00:00.000Z",
+      "links": []
+    },
+    {
+      "kind": "tasks#task",
+      "id": "dG9wLXRhc2stMQ",
+      "etag": "\"LTI3MDAwMDAwMA\"",
+      "title": "Prepare for probability theory test",
+      "updated": "2026-10-04T12:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/lists/Ry1Lb0VhWlN0VWpIdXhPQQ/tasks/dG9wLXRhc2stMQ",
+      "position": "00000000000000000000",
+      "status": "needsAction",
+      "due": "2026-10-05T00:00:00.000Z",
+      "links": []
+    },
+    {
+      "kind": "tasks#task",
+      "id": "c3ViLXRhc2stMQ",
+      "etag": "\"LTI4MDAwMDAwMA\"",
+      "title": "Solve problem set 2",
+      "updated": "2026-10-03T12:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/lists/Ry1Lb0VhWlN0VWpIdXhPQQ/tasks/c3ViLXRhc2stMQ",
+      "parent": "dG9wLXRhc2stMQ",
+      "position": "00000000000000000000",
+      "status": "completed",
+      "completed": "2026-10-03T12:00:00.000Z",
+      "hidden": true,
+      "links": []
+    },
+    {
+      "kind": "tasks#task",
+      "id": "b3JwaGFuLTE",
+      "etag": "\"LTI5MDAwMDAwMA\"",
+      "title": "Orphan subtask",
+      "updated": "2026-10-02T12:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/lists/Ry1Lb0VhWlN0VWpIdXhPQQ/tasks/b3JwaGFuLTE",
+      "parent": "bm90LWluLXRoaXMtcGFnZQ",
+      "position": "00000000000000000002",
+      "status": "needsAction",
+      "due": "2026-10-01T00:00:00.000Z",
+      "links": []
+    },
+    {
+      "kind": "tasks#task",
+      "id": "ZGVsZXRlZC0x",
+      "etag": "\"LTMwMDAwMDAwMA\"",
+      "title": "Deleted one",
+      "updated": "2026-10-01T12:00:00.000Z",
+      "position": "00000000000000000003",
+      "status": "needsAction",
+      "deleted": true,
+      "links": []
+    }
+  ]
+}

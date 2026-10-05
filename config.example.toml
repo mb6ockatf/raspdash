@@ -1,0 +1,157 @@
+# raspdash configuration: example.
+#
+# Copy this file to config.toml and edit it; config.toml is ignored by git,
+# so personal hosts, lists and places never end up in the repository.
+#
+# Relative paths are relative to the directory holding this file.
+# Credentials live in secrets/ (ignored by git).  The manual ('info
+# raspdash') documents every key.
+
+[app]
+# Screens in tab order.  Remove one to hide it.
+screens = ["machines", "tasks", "timetable", "weather", "markets"]
+# Switch to the next screen every N seconds (0 = never).
+rotate_seconds = 60
+# After a key press, stop rotating for N seconds.
+pause_after_key_seconds = 120
+# Let 'q' quit.  The kiosk launcher restarts raspdash anyway.
+allow_quit = true
+# "nerd": Nerd Font icons (the kiosk uses DejaVuSansM Nerd Font Mono);
+# "unicode": standard symbols only, for terminals without a Nerd Font.
+icons = "nerd"
+# Where fetched data is cached between runs (default ~/.cache/raspdash).
+# cache_dir = "~/.cache/raspdash"
+# std::format chrono spec for the header clock.
+clock_format = "%a %d %b  %H:%M"
+
+[machines]
+# Seconds between polls of each host (live telemetry: keep it short).
+interval = 10
+# Hard limit for one poll, in seconds; the ssh child is killed after it.
+timeout = 15
+# CPU samples kept per host for the history chart.
+history = 120
+# Key the Pi uses for every ssh host unless a host sets its own.
+ssh_identity = "~/.ssh/raspdash_ed25519"
+# stats_script = "agent/raspdash-stats.sh"   # default: this, then $(pkgdatadir)
+
+# One table per machine.  kind = "local" (the machine raspdash runs on),
+# "ssh" (see 'info raspdash "Adding a host"') or "keenetic" (a Keenetic
+# router; its login goes into the credentials file).  A host with an
+# empty address shows as "not configured".
+[[machines.hosts]]
+name = "pi"
+kind = "local"
+
+[[machines.hosts]]
+name = "laptop"
+kind = "ssh"
+address = ""            # e.g. "192.168.1.10"
+user = ""               # login name on that machine
+
+[[machines.hosts]]
+name = "router"
+kind = "keenetic"
+address = "192.168.1.1"
+credentials = "secrets/keenetic.toml"   # login = "...", password = "..."
+
+[tasks]
+# Titles of the Google Tasks lists to show, in this order.  Leave the
+# array empty to show every list.
+lists = []              # e.g. ["My Tasks", "Shopping"]
+# Also show completed (and hidden) tasks, ticked and dimmed.
+show_completed = false
+# Also show tasks assigned to you from Google Docs or Chat spaces.
+show_assigned = false
+# Show the first line of each task's notes under it.
+show_notes = true
+# Due dates up to this many days ahead are highlighted.
+soon_days = 2
+# Download from Google Cloud ("Desktop app" OAuth client) and run
+# raspdash-auth once to create the token.  See 'info raspdash Tasks'.
+client_secret = "secrets/google_client_secret.json"
+token = "secrets/google_token.json"
+# Fetch at most once an hour; 'r' on the Tasks screen fetches now.
+interval = 3600
+timezone = "Europe/Moscow"
+
+[timetable]
+# Your study group exactly as ruz.spbstu.ru spells it, e.g. "1234567/12345".
+group = ""
+# group_id = 12345          # skip the name lookup
+# Seconds between fetches; a new week is fetched as soon as it starts.
+interval = 259200           # 3 days
+timezone = "Europe/Moscow"
+show_teachers = true
+
+[weather]
+# Forecasts from MET Norway (api.met.no), CC BY 4.0.  raspdash asks every
+# `interval` seconds, but never before the Expires time MET Norway sends,
+# and uses If-Modified-Since so unchanged forecasts cost almost nothing.
+interval = 7200
+# Days in the daily table (the forecast reaches about 9 days ahead).
+days = 7
+# api = "https://api.met.no/weatherapi/locationforecast/2.0/complete"
+
+# One table per city, in display order.  lat/lon in decimal degrees (only
+# four decimals are sent); altitude in metres improves the temperature
+# (MET Norway uses its own terrain model if it is left out); timezone is
+# the IANA name used for local times and day boundaries.
+[[weather.cities]]
+name = "Saint Petersburg"
+lat = 59.9386
+lon = 30.3141
+altitude = 11
+timezone = "Europe/Moscow"
+
+[markets]
+# Refresh twice a day; the screen shows how old each chart is.
+interval = 43200
+# Day labels on the x axis are midnights in this zone.
+timezone = "Europe/Moscow"
+
+# Charts in screen order.  Providers are tried in order; the first one
+# with fresh data wins.  Without any [[markets.charts]] these four are
+# built in.  icon is a Nerd Font glyph, shown when [app] icons = "nerd".
+
+[[markets.charts]]
+name = "TON/USDT"
+icon = "\U000F01C8"            # md-diamond_stone
+decimals = 3
+max_age_hours = 6
+providers = [
+  { type = "kraken", symbol = "TONUSD" },
+  { type = "coingecko", symbol = "the-open-network", vs = "usd" },
+  { type = "binance", symbol = "TONUSDT" },
+]
+
+[[markets.charts]]
+name = "XAUT/USDT"
+icon = "\U000F124F"            # md-gold
+decimals = 1
+max_age_hours = 6              # Tether Gold trades around the clock
+providers = [
+  { type = "binance", symbol = "XAUTUSDT" },
+  { type = "bybit", symbol = "XAUTUSDT" },
+  { type = "coingecko", symbol = "tether-gold" },
+]
+
+[[markets.charts]]
+name = "USD/RUB"
+icon = "\U000F01B1"            # md-currency_rub
+decimals = 2
+max_age_hours = 100            # CBR publishes one rate per working day
+providers = [
+  { type = "cbr", symbol = "R01235" },
+]
+
+[[markets.charts]]
+name = "BTC/USD"
+icon = "\U000F0813"            # md-bitcoin
+decimals = 0
+max_age_hours = 6
+providers = [
+  { type = "coinbase", symbol = "BTC-USD" },
+  { type = "kraken", symbol = "XBTUSD" },
+  { type = "binance", symbol = "BTCUSDT" },
+]

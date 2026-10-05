@@ -1,0 +1,50 @@
+#!/bin/sh
+# pre-commit: format staged C/C++ sources with Artistic Style, GNU style.
+#
+# Copyright (C) 2026 mb6ockatf
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Enable once per clone with:  git config core.hooksPath hooks
+#
+# Files that are fully staged are formatted and re-staged.  A file that
+# also has unstaged changes is not touched; the commit is refused instead,
+# so a partial staging is never silently widened.  third_party/ is skipped.
+
+set -eu
+
+if ! command -v astyle >/dev/null 2>&1; then
+    echo "pre-commit: astyle not found; install it (nala install astyle)" >&2
+    exit 1
+fi
+
+ASTYLE_OPTS="--style=gnu --suffix=none --quiet"
+
+files=$(git diff --cached --name-only --diff-filter=ACMR -- \
+    '*.c' '*.h' '*.cc' '*.cpp' '*.hh' '*.hpp' \
+    | grep -v '^third_party/' || true)
+
+[ -n "$files" ] || exit 0
+
+status=0
+for f in $files; do
+    # Would astyle change the staged version?
+    staged=$(git show ":$f")
+    formatted=$(printf '%s\n' "$staged" | astyle $ASTYLE_OPTS)
+    [ "$staged" = "$formatted" ] && continue
+
+    if ! git diff --quiet -- "$f"; then
+        echo "pre-commit: $f needs formatting but has unstaged changes;" >&2
+        echo "            run 'astyle $ASTYLE_OPTS $f' and stage it." >&2
+        status=1
+        continue
+    fi
+    astyle $ASTYLE_OPTS "$f"
+    git add -- "$f"
+    echo "pre-commit: formatted $f"
+done
+
+exit $status

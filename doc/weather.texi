@@ -1,0 +1,214 @@
+@c weather.texi -- the Weather screen.
+@c Copyright (C) 2026 mb6ockatf
+@c This file is part of the raspdash manual; see raspdash.texi for the
+@c copying conditions.
+
+@node Weather
+@chapter Weather
+
+The weather screen shows a forecast for each configured city: the
+current conditions, a temperature curve with precipitation for the next
+24 hours, and a table of the coming days.
+
+@section Data source
+
+Forecasts come from the Norwegian Meteorological Institute (MET Norway),
+through the @samp{complete} product of its Locationforecast 2.0 API at
+@url{https://api.met.no/weatherapi/locationforecast/2.0/}.  It is based
+on the ECMWF global model, refined with MET Norway's high-resolution
+Nordic model (MEPS) where that model reaches, and post-processed with
+observations.
+Unlike the @samp{compact} product it also carries the probability of
+precipitation, gusts and uncertainty percentiles, which the screen uses.
+
+The data is licensed under the Creative Commons Attribution 4.0
+license (CC BY 4.0); credit: @emph{Data from MET Norway}.
+
+MET Norway's terms of service (@url{https://api.met.no/doc/TermsOfService})
+ask every client to identify itself in the @code{User-Agent} header,
+to send no more than four decimals of latitude and longitude, to cache
+responses, never to ask again before the @code{Expires} time of the
+previous answer, and to use @code{If-Modified-Since}.  raspdash does
+all of this; set @code{user_agent} in @code{[app]} to something that
+identifies you if you run many dashboards.
+
+@section Screen
+
+Each city gets a box titled with its name and its local time.
+
+@itemize @bullet
+@item
+The first lines show the current weather symbol and description, the
+temperature and how it feels, the wind (an arrow pointing where the
+wind blows to, the compass direction it comes from, its speed and
+gusts), relative humidity, sea-level pressure, cloud cover, and the
+precipitation expected in the next hour with its probability.  Items
+that do not fit the box are left out from the right.
+
+@item
+The chart shows the temperature over the next 24 hours as a line of
+Braille dots, the highest and lowest values on the left, a bar for
+every hour with precipitation (scaled to the label under the lowest
+temperature, at least 1@tie{}mm), and the local hour every three or
+six hours.
+
+@item
+The table lists today and the following days: the symbol and
+description most typical of the daytime, the lowest and highest
+temperature, total precipitation and the highest probability of
+precipitation.  Days begin at local midnight of the city.
+@end itemize
+
+With four cities and a wide enough terminal the boxes form a two by two
+grid; on a terminal narrower than 90 columns they are stacked.  When a
+box is short, the chart is dropped first so that at least five days
+remain in the table.
+
+When @code{[app] icons} is @samp{nerd}, weather symbols, wind arrows
+and the humidity, pressure and cloud markers use the Weather Icons
+glyphs of a Nerd Font; with @samp{unicode} they fall back to symbols
+such as @samp{☀}, @samp{☁}, @samp{☂}, @samp{❄} and @samp{↯}.
+
+If a city cannot be fetched, its box keeps the last forecast and shows
+the error on its bottom line; the footer reports how many cities
+failed.
+
+@section Configuration
+
+@example
+[weather]
+interval = 7200
+days = 7
+
+[[weather.cities]]
+name = "Saint Petersburg"
+lat = 59.9386
+lon = 30.3141
+altitude = 11
+timezone = "Europe/Moscow"
+@end example
+
+@table @code
+@item interval
+Seconds between checks for a new forecast; default 7200 (two hours).
+MET Norway updates its forecasts about once an hour.  A check never
+happens before the @code{Expires} time of the previous response, and
+an unchanged forecast is answered with a short ``304 Not Modified''.
+Pressing @kbd{r} checks at once, within the same rule.
+
+@item days
+Rows in the daily table, at most; default 7.  The forecast reaches about
+nine days ahead.
+
+@item api
+The Locationforecast URL; default
+@samp{https://api.met.no/weatherapi/locationforecast/2.0/complete}.
+
+@item cities
+An array of tables, one per city, shown in order.  There are no
+built-in places: without any, the screen asks for them.
+
+@table @code
+@item name
+Shown in the box title.
+@item lat
+@itemx lon
+Position in decimal degrees, north and east positive.  Only four
+decimals (about 10@tie{}m) are sent.
+@item altitude
+Height above sea level in metres, optional.  MET Norway corrects the
+temperature for it; without it, MET Norway uses its own terrain model,
+which can be off by tens of metres in hilly places.
+@item timezone
+IANA time zone name such as @samp{Europe/Athens}, used for the local
+time in the title, the hour labels and the day boundaries.  Defaults
+to the system time zone.
+@end table
+@end table
+
+@section Adding a city
+
+Look the place up, for example with
+@url{https://nominatim.openstreetmap.org} or the Open-Meteo geocoding
+API, which also report elevation and time zone:
+
+@example
+curl 'https://geocoding-api.open-meteo.com/v1/search?name=Helsinki'
+@end example
+
+Then add a @code{[[weather.cities]]} table with its name, @code{lat},
+@code{lon}, @code{altitude} and @code{timezone}, and restart raspdash.
+
+@section Internals
+
+The code lives in @file{src/weather.cpp}.
+
+@table @asis
+@item Parsing
+@code{weather::parse_forecast} reads the GeoJSON into a list of
+@code{Point}s, one per time step.  Each holds the instant values at its
+time and, when present, the summaries for the next one and next six
+hours.  Values the API leaves out are NaN (test with
+@code{weather::has}), missing symbols are empty strings.  The time
+series is hourly for roughly the first two and a half days and
+six-hourly after that.
+
+@item Daily summaries
+@code{weather::daily} gives each point the time until the next one: an
+hourly point contributes its one-hour precipitation, probability and
+symbol, a six-hourly point its six-hour values.  Every value is then
+spread over the hours it covers, so a six-hour block that crosses local
+midnight puts half of its precipitation on each day.  Instant
+temperatures count for the day they fall on; a six-hour block's minimum
+and maximum count for the day holding the block's midpoint.  A symbol
+weighs 1 for every hour between 08:00 and 20:00 local time and 0.01 at
+night, and the heaviest wins, so nights decide only when nothing else
+does.  Days after the first that the forecast covers for less than six
+hours are dropped.
+
+@item Symbols
+@code{weather::symbol} strips the @samp{_day}, @samp{_night} and
+@samp{_polartwilight} suffixes, handles the five plain codes, and
+composes the rest from an optional @samp{light}/@samp{heavy} prefix,
+@samp{rain}, @samp{sleet} or @samp{snow}, an optional @samp{showers}
+and an optional @samp{andthunder}.  MET Norway spells two codes
+@samp{lightssleetshowersandthunder} and
+@samp{lightssnowshowersandthunder}; the stray @samp{s} is accepted.
+Unknown codes show as @samp{?} with the raw code.  Night variants pick
+the night Nerd Font glyphs for clear, fair and partly cloudy skies.
+
+@item Fetching and caching
+@code{weather::MetSource} is a single source for all cities.  On each
+run it asks for every city whose previous response has expired,
+sending @code{If-Modified-Since} with the stored @code{Last-Modified};
+a 304 keeps the parsed forecast.  @code{weather::HttpCache} holds the
+two headers per city.  Truncation to four decimals goes through
+@code{weather::truncate_coordinate}, which nudges the value by
+@math{10^{-7}} first so that a coordinate such as 25.4626, stored in
+binary as 25.462599@dots{}, is not cut to 25.4625.
+
+Each response body is saved in the disk cache under a key made of the
+truncated coordinates (@file{weather-59.9386_30.3141.json}), so editing
+a city in the configuration never shows another place's forecast.  A
+sidecar @file{@dots{}.json.meta} holds the @code{Last-Modified} and
+@code{Expires} lines.  After a 304 the body is saved again so that the
+file's modification time records when the data was last confirmed.
+
+At start-up @code{MetSource::restore} parses every cached city and
+reports the oldest save time, so the screen fills at once and no
+request is made while the data is younger than @code{interval}.  If
+any city is missing from the cache it reports nothing, which makes the
+poller fetch at once; cities that were restored then cost only a
+conditional request, or none while their @code{Expires} lies ahead.
+
+Failures are recorded per city.  The run as a whole fails (and the
+footer shows it, with the poller's back-off) when any city failed,
+naming the first one; the other cities keep their data.
+
+@item Layout
+Boxes are laid out two by two when the screen area is at least 90
+columns wide.  Inside a box the three ``now'' lines come first; the
+chart is drawn only if, after it and a blank line, at least five table
+rows remain, and it takes at most ten rows (two of them for the
+precipitation bars and the hour labels).
+@end table

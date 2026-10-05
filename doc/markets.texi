@@ -1,0 +1,220 @@
+@c markets.texi -- the Markets screen.
+@c Copyright (C) 2026 mb6ockatf
+@c This file is part of the raspdash manual; see raspdash.texi for the
+@c copying conditions.
+
+@node Markets
+@chapter Markets
+
+The @samp{Markets} screen draws a week-long price chart for each
+configured instrument: by default TON/USDT, XAUT/USDT (Tether Gold), USD/RUB and
+BTC/USD, in a two-by-two grid (one column when the terminal is narrower
+than 90 columns).  Each chart shows the last price, the change over the
+week in absolute terms and in percent (green when up, red when down),
+the week's high and low, a Braille line plot with a labelled price axis,
+and the names of the days along the time axis.
+
+The frame title gives the age of the newest point and the provider that
+served it, for example @samp{BTC/USD · 3h ago · coinbase BTC-USD}.  The
+age comes before the provider so that it survives when a narrow frame
+cuts the title short.  The title turns yellow when the newest point is
+older than the chart's @code{max_age_hours} plus one refresh interval,
+which means the data has not been updated as often as it should be.
+
+@section Refreshing and the cache
+
+Prices are fetched twice a day by default (@code{interval = 43200}).
+Every successful response is saved in the cache directory (@pxref{Sources and caching}), one file per chart, together with the provider that served
+it.  When raspdash starts it redraws the charts from these files at
+once, and fetches again only when they are older than the interval, so a
+restart or a reboot costs no requests.  The cache of a chart is ignored
+when its provider is no longer listed for that chart, and the whole
+cache is ignored when any chart has none, so a newly added chart is
+fetched without waiting.
+
+Press @kbd{r} on the screen to fetch at once.  When some charts fail,
+the others are updated anyway, the failed ones keep their previous data
+with @samp{refresh failed} in their first line, and the footer names
+them; raspdash then retries sooner than the interval, backing off after
+repeated failures.
+
+@section Providers and fallback
+
+Each chart has an ordered list of providers.  raspdash asks them in
+turn and uses the first answer that has at least two points and whose
+newest point is no older than the chart's @code{max_age_hours}.  An
+error, an empty answer or a stale one moves on to the next provider; if
+all of them fail, the chart shows every provider's error.
+
+@table @code
+@item binance
+Binance spot klines, hourly.  @var{symbol} like @samp{BTCUSDT}.
+Binance stopped updating TONUSDT at the end of June 2026 while still
+listing it, which is why TON/USDT tries it last and why the age check
+exists.
+@item bybit
+Bybit v5 spot klines, hourly.  @var{symbol} like @samp{BTCUSDT}.
+@item okx
+OKX candles, hourly.  @var{symbol} like @samp{BTC-USDT}.
+@item coinbase
+Coinbase Exchange candles, hourly.  @var{symbol} like @samp{BTC-USD}.
+This is a real US dollar market, unlike the USDT pairs.
+@item kraken
+Kraken OHLC, hourly.  @var{symbol} like @samp{TONUSD}, @samp{XBTUSD},
+@samp{PAXGUSD}.
+@item coingecko
+CoinGecko market chart, roughly hourly.  @var{symbol} is the coin's
+CoinGecko id (@samp{the-open-network}, @samp{bitcoin}, @samp{tether-gold});
+the optional key @code{vs} picks the quote currency (default
+@samp{usd}).
+@item cbr
+The Bank of Russia's official daily rate.  @var{symbol} is the CBR
+currency code, @samp{R01235} for the US dollar.
+@end table
+
+None of these services needs an account or a key.
+
+@section Caveats
+
+@itemize @bullet
+@item
+Yahoo Finance is not supported.  It has no public API; the endpoint its
+web pages use answered @samp{429 Too Many Requests} for hours at a time,
+so it was removed.
+@item
+XAUT (Tether Gold) is a token backed by one troy ounce of gold held by
+Tether.  It follows the spot gold price closely but is not the same
+thing: its price includes the market's view of the issuer, and it
+trades around the clock, so the chart has no weekend gaps.
+@item
+The CBR rate is set once per working day, so the USD/RUB chart, which uses only this rate, has
+about five points a week; the rate dated a given day applies from
+Moscow midnight of that day.  Since June 2024 the Moscow Exchange has no
+USD trading, so there is no official intraday USD/RUB source.
+@item
+TON/USDT is drawn from TON/USD markets (Kraken, CoinGecko) because
+Kraken lists no TON/USDT pair and Binance's has stopped; USDT trades
+within a fraction of a percent of the dollar.
+@end itemize
+
+@section Configuration
+
+@example
+[markets]
+interval = 43200
+timezone = "Europe/Moscow"
+
+[[markets.charts]]
+name = "TON/USDT"
+icon = "\U000F01C8"
+decimals = 3
+max_age_hours = 6
+providers = [
+  @{ type = "kraken", symbol = "TONUSD" @},
+  @{ type = "coingecko", symbol = "the-open-network" @},
+  @{ type = "binance", symbol = "TONUSDT" @},
+]
+@end example
+
+@table @code
+@item interval
+Seconds between fetches.  Default 43200 (12 hours).
+@item timezone
+Time zone whose midnights label the time axis.  Default
+@samp{Europe/Moscow}.
+@item charts
+An array of tables, one per chart, in screen order.  When it is absent
+the four default charts are used; when it is present, only the charts it
+lists are shown.
+@end table
+
+Each chart takes:
+
+@table @code
+@item name
+The title, such as @samp{BTC/USD}.  Required.  It also names the cache
+file, so renaming a chart refetches it.
+@item icon
+A Nerd Font glyph shown before the name when @code{[app] icons} is
+@samp{nerd}, written as a TOML escape such as @samp{"\U000F0813"}.
+Optional.
+@item decimals
+Decimals of the prices shown.  When absent they follow the price's
+magnitude.
+@item max_age_hours
+The newest point of an acceptable answer must be at most this old.
+Default 6.  Use about 80 for instruments that do not trade at weekends
+and about 100 for the daily CBR rate.
+@item providers
+The providers to try, in order, as inline tables with @code{type},
+@code{symbol} and, for @code{coingecko}, @code{vs}.  Required.  An
+unknown type is an error when raspdash starts.
+@end table
+
+To add an instrument, add a @code{[[markets.charts]]} table (copy the
+four defaults first, since a @code{charts} array replaces them).  For
+Ethereum, for example:
+
+@example
+[[markets.charts]]
+name = "ETH/USD"
+decimals = 0
+providers = [
+  @{ type = "coinbase", symbol = "ETH-USD" @},
+  @{ type = "kraken", symbol = "ETHUSD" @},
+  @{ type = "coingecko", symbol = "ethereum" @},
+]
+@end example
+
+The grid has two columns, so five or six charts give three rows.
+
+@section Internals
+
+@file{src/markets.cpp} has one parser per provider
+(@code{parse_binance}, @code{parse_kraken}, @dots{}), each turning a
+response body into points (candle start time, close) sorted by time
+with duplicates removed.  Exchanges that list newest first are sorted
+like the rest.  Prices written as JSON strings, as most exchanges do,
+are read with @code{std::from_chars}.  Error responses (an object where
+Binance or Coinbase normally send an array, a non-zero @code{retCode}
+from Bybit, @code{code} other than @samp{"0"} from OKX, a non-empty
+@code{error} array from Kraken, a body
+without @code{<ValCurs} from CBR) become exceptions with the provider's
+message.  Kraken keys its result by its canonical pair name, which may
+differ from the one requested (@samp{XBTUSD} comes back as
+@samp{XXBTZUSD}), so the parser takes the first key that is not
+@samp{last}.  The CBR document is windows-1251, but every byte read from it
+is ASCII; its values use a decimal comma and are divided by
+@code{Nominal}.
+
+@code{provider_url} builds each request for the week before the current
+time.  The CBR request reaches ten days back and one day ahead, because
+weekends have no record and the latest rate is dated tomorrow.
+
+@code{fetch_chart} walks a chart's providers, applies @code{last_week}
+and the age check, and records each failure, without the URL that
+transport errors start with, so the final error stays readable.
+@code{last_week} keeps the points within seven days of the newest one:
+the window follows the data rather than the clock, so a chart restored
+from a twelve-hour-old cache still shows a whole week.
+
+The source fetches all charts concurrently, one thread per chart, and
+stores per chart either a new result or the error next to the previous
+result.  It throws after storing when any chart failed, so the footer
+shows the failure and the poller retries sooner.  The cache file of a
+chart (@file{chart-@var{slug}.json}, where the slug is the lower-cased
+name with other characters turned into dashes) holds a JSON object with
+the provider's @code{type}, @code{symbol}, @code{vs} and the raw
+@code{body}; restoring parses the body again with the same parser.
+
+Charts are plotted against time, not point index, so the day labels line
+up across charts and the weekend gaps in forex data stay visible.  A
+segment is not drawn across a gap longer than four times the median
+spacing of the points: the weekend in hourly futures data is left empty
+instead of being bridged by a line through prices that never traded,
+while the daily CBR series, whose weekend gap is three times its usual
+spacing, stays connected.  The price axis is padded by 4% on each side
+and labelled with ``nice'' steps (1, 2, 2.5 or 5 times a power of ten)
+that fall inside the padded range; rows without a dot get a dotted guide
+line at each label.  Day labels go at local midnights and are skipped
+where they would overlap.

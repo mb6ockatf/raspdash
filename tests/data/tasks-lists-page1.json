@@ -1,0 +1,23 @@
+{
+  "kind": "tasks#taskLists",
+  "etag": "\"LTk4NzY1NDMyMQ\"",
+  "nextPageToken": "CgwI3oSfuQYQ-I2nkQE",
+  "items": [
+    {
+      "kind": "tasks#taskList",
+      "id": "MDk4NzY1NDMyMTA5ODc2NTQzMjE6MDow",
+      "etag": "\"LTEyMzQ1Njc4OQ\"",
+      "title": "My Tasks",
+      "updated": "2026-10-04T18:22:03.512Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/users/@me/lists/MDk4NzY1NDMyMTA5ODc2NTQzMjE6MDow"
+    },
+    {
+      "kind": "tasks#taskList",
+      "id": "Ry1Lb0VhWlN0VWpIdXhPQQ",
+      "etag": "\"LTU1NTU1NTU1NQ\"",
+      "title": "Учёба",
+      "updated": "2026-10-03T09:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/users/@me/lists/Ry1Lb0VhWlN0VWpIdXhPQQ"
+    }
+  ]
+}

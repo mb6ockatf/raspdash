@@ -1,0 +1,40 @@
+# autotools output
+/aclocal.m4
+/autom4te.cache/
+/build-aux/
+/config.h
+/config.h.in
+/config.h.in~
+/config.log
+/config.status
+/configure
+/configure~
+/m4/
+/stamp-h1
+Makefile
+Makefile.in
+/raspdash-*.tar.gz
+/raspdash-*/
+
+# build products
+*.o
+*.a
+.deps/
+.dirstamp
+/src/raspdash
+/src/raspdash-auth
+/tests/test_*
+!/tests/test_*.cpp
+*.log
+*.trs
+
+# personal configuration (start from config.example.toml) and
+# credentials and tokens: never commit
+/config.toml
+/secrets/*
+!/secrets/README.md
+
+# generated documentation (Automake builds it in the source tree)
+/doc/raspdash.info
+/doc/stamp-vti
+/doc/version.texi

@@ -1,0 +1,6 @@
+raspdash NEWS -- history of user-visible changes.
+
+* Noteworthy changes in release 0.1.0 (unreleased)
+
+** First version: machines, Google Tasks, RUZ timetable, weather and
+   market chart screens in a full-screen ncurses terminal dashboard.

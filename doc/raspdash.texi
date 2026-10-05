@@ -1,0 +1,768 @@
+\input texinfo   @c -*-texinfo-*-
+@c %**start of header
+@setfilename raspdash.info
+@include version.texi
+@settitle raspdash @value{VERSION}
+@documentencoding UTF-8
+@c %**end of header
+
+@copying
+This manual is for raspdash (version @value{VERSION}, @value{UPDATED}),
+a full-screen terminal dashboard for a Raspberry Pi.
+
+Copyright @copyright{} 2026 mb6ockatf
+
+@quotation
+This manual is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.
+
+This manual is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+@end quotation
+@end copying
+
+@dircategory Miscellaneous
+@direntry
+* raspdash: (raspdash).         Terminal dashboard for a Raspberry Pi.
+@end direntry
+
+@titlepage
+@title raspdash
+@subtitle A terminal dashboard for a Raspberry Pi
+@subtitle for version @value{VERSION}, @value{UPDATED}
+@author mb6ockatf
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+@end titlepage
+
+@contents
+
+@ifnottex
+@node Top
+@top raspdash
+
+raspdash shows, on a terminal filling the Pi's screen, the state of the
+machines on the local network, Google Tasks lists, the week's university
+timetable, weather forecasts and market charts.
+
+@insertcopying
+@end ifnottex
+
+@menu
+* Overview::                    What raspdash shows and how it works.
+* Building::                    Compiling from source.
+* Installing on the Pi::        Kiosk start at boot.
+* Invoking raspdash::           Command-line options and keys.
+* Configuration::               The @file{config.toml} file.
+* Secrets::                     Credentials and tokens.
+* Machines::                    Screen 1: computers on the network.
+* Tasks::                       Screen 2: Google Tasks.
+* Timetable::                   Screen 3: ruz.spbstu.ru timetable.
+* Weather::                     Screen 4: forecasts.
+* Markets::                     Screen 5: price charts.
+* Development::                 Hacking on raspdash.
+* Copying::                     The license.
+* Concept Index::               Index of concepts.
+@end menu
+
+@node Overview
+@chapter Overview
+@cindex overview
+
+raspdash is a single program, written in C++23, that draws on a terminal
+with ncurses.  On the Pi it runs inside a full-screen alacritty window
+that the X session starts after automatic login (@pxref{Installing on the
+Pi}).
+
+The dashboard has five @dfn{screens}, shown one at a time:
+
+@enumerate
+@item
+@strong{Machines}: load, CPU, memory, disks and temperatures of the
+computers on the local network and of the router.
+@item
+@strong{Tasks}: read-only Google Tasks lists, chosen in the configuration.
+@item
+@strong{Timetable}: this week's classes of a group at Peter the Great
+St.@: Petersburg Polytechnic University, from @uref{https://ruz.spbstu.ru}.
+@item
+@strong{Weather}: forecasts from MET Norway for configured places.
+@item
+@strong{Markets}: week-long price charts.
+@end enumerate
+
+@menu
+* Sources and caching::         How and when data is fetched.
+@end menu
+
+@node Sources and caching
+@section Sources and caching
+@cindex sources
+@cindex caching
+@cindex lazy fetching
+@cindex refresh
+
+Each screen gets its data from one or more @dfn{sources}.  Every source
+runs on its own thread, so the screens only draw what the sources
+already have, and a slow or broken network never freezes the display.
+
+Fetching is @dfn{lazy}.  Each source has an interval, and fetches again
+only when its data is older than that:
+
+@multitable @columnfractions .3 .3 .4
+@headitem Screen @tab Default interval @tab Also fetched when
+@item Machines @tab 10 seconds @tab ---
+@item Tasks @tab 1 hour @tab ---
+@item Timetable @tab 3 days @tab a new week starts
+@item Weather @tab 2 hours @tab ---
+@item Markets @tab 12 hours @tab ---
+@end multitable
+
+What a source fetches is also saved in the cache directory
+(@file{~/.cache/raspdash} by default; @pxref{Application settings}).
+When raspdash starts, every source first loads its cached data, so the
+screens are filled at once, even without a network, and the interval
+counts from when that data was fetched, not from the start.  Restarting
+the dashboard or rebooting the Pi therefore does not cause a burst of
+requests.
+
+When a fetch fails, the screen keeps showing the last good data and the
+footer says how old it is and what went wrong.  The source tries again
+after one minute, then after two, four, and so on, up to its interval or
+30 minutes, whichever is shorter.  Press @kbd{r} to fetch the current
+screen's data at once.
+
+@cindex rotation
+The screens take turns in the same terminal window: each is shown for
+60 seconds, then the terminal is cleared and the next one is drawn.  Pressing any key pauses the rotation for
+a while (@pxref{Application settings}).
+
+@node Building
+@chapter Building
+@cindex building
+@cindex requirements
+
+raspdash uses the GNU build system.  It needs:
+
+@itemize
+@item
+A C++23 compiler whose library has @code{<print>}, @code{std::expected}
+and @code{std::ranges::to}: GCC 14 or later.  @command{configure} checks
+for this and stops if the compiler is too old.
+@item
+ncurses with wide-character support (@code{ncursesw}), libcurl,
+OpenSSL's @code{libcrypto} and the nlohmann-json headers.  On Debian
+and derivatives these are the packages @code{libncurses-dev},
+@code{libcurl4-openssl-dev}, @code{libssl-dev} and
+@code{nlohmann-json3-dev}.
+@item
+@command{pkg-config} and, when building from a git checkout, Autoconf,
+Automake, @code{autoconf-archive} and Texinfo.
+@end itemize
+
+The TOML parser, toml++, is included in @file{third_party/}.
+
+From a git checkout, generate the build system first:
+
+@example
+./bootstrap
+@end example
+
+@noindent
+Then build as usual; building in a separate directory works too:
+
+@example
+./configure
+make
+make check
+make install
+@end example
+
+@cindex @option{--enable-static-libstdcxx}
+@command{configure} accepts the standard options and one of its own:
+
+@table @option
+@item --enable-static-libstdcxx
+Link the C++ runtime (libstdc++ and libgcc) statically.  Use this when
+the compiler is newer than the system's own, as on Raspberry Pi OS
+Bullseye with a self-built GCC: otherwise the program would look for
+the newer @file{libstdc++.so} at run time and fail to start.
+@item --enable-static-deps
+@cindex @option{--enable-static-deps}
+Ask @command{pkg-config} for static link flags (@samp{pkg-config
+--static}), for linking against static builds of ncursesw, libcurl and
+OpenSSL such as the private ones described in
+@file{deploy/TASK-build-deps.md}.  With a distribution's libcurl, which is
+built with many optional features, the static flags name libraries that
+may not be installed; leave the option off there.
+@end table
+
+To use a compiler that is not the default, name it:
+
+@example
+./configure CXX=/opt/gcc-16/bin/g++ --enable-static-libstdcxx
+@end example
+
+@command{make install} installs @command{raspdash}, @command{raspdash-auth}
+(@pxref{Tasks}), this manual, the statistics script used by the Machines
+screen and a sample configuration in @file{@var{datadir}/raspdash}.
+
+@node Installing on the Pi
+@chapter Installing on the Pi
+@cindex Raspberry Pi
+@cindex kiosk
+@cindex autostart
+
+The Pi runs Raspberry Pi OS with the LXDE desktop and automatic login.
+raspdash starts with the desktop session: an XDG autostart entry runs
+@command{raspdash-kiosk}, which opens a full-screen, borderless alacritty
+window running @command{raspdash}, and starts it again a few seconds
+after it exits or crashes.
+
+The simplest way to set this up is the script in the source tree.  Run
+it on the Pi from a checkout, naming the C++23 compiler if it is not the
+default:
+
+@example
+CXX=/opt/gcc-16/bin/g++ deploy/install-pi.sh
+@end example
+
+@noindent
+It builds in @file{_build/}, runs the test suite, installs into
+@file{~/.local} (no root needed), and then:
+
+@itemize
+@item
+installs @file{deploy/raspdash-kiosk} as @file{~/.local/bin/raspdash-kiosk}
+and @file{deploy/alacritty-kiosk.yml} into
+@file{~/.local/share/raspdash/};
+@item
+writes @file{~/.config/autostart/raspdash.desktop};
+@item
+links @file{~/.config/raspdash/config.toml} to the checkout's
+@file{config.toml}, so editing the file in the checkout is enough.
+@end itemize
+
+Set @env{PREFIX} to install elsewhere and @env{BUILD_DIR} to build
+elsewhere.
+
+@menu
+* Kiosk launcher::              @command{raspdash-kiosk}.
+* Fonts::                       The terminal font and icons.
+* Updating::                    Installing a new version.
+@end menu
+
+@node Kiosk launcher
+@section The kiosk launcher
+@cindex @command{raspdash-kiosk}
+@cindex screensaver
+
+@command{raspdash-kiosk} turns off screen blanking (@samp{xset s off
+-dpms}) and stops xscreensaver, which the default LXDE session starts,
+so the dashboard stays visible.  Set @env{RASPDASH_KEEP_SCREENSAVER} to
+@samp{1} to keep them.  It hides the mouse pointer when
+@command{unclutter} is installed.
+
+Other variables it reads:
+
+@table @env
+@item RASPDASH
+The raspdash binary to run (default: @command{raspdash} from
+@env{PATH}).
+@item RASPDASH_CONFIG
+The configuration file, passed on to raspdash.
+@item RASPDASH_TERM_CONFIG
+The alacritty configuration.  By default it uses
+@file{alacritty-kiosk.yml} next to the script or in
+@file{../share/raspdash/}.
+@end table
+
+It logs starts and exits to
+@file{~/.local/state/raspdash/kiosk.log}.
+
+The alacritty configuration is kept apart from the user's own
+@file{~/.alacritty.yml}.  It is in YAML because the Pi's alacritty
+(0.13.0-dev) predates the TOML format.
+
+@node Fonts
+@section Fonts
+@cindex fonts
+@cindex Nerd Font
+@cindex icons
+
+The kiosk terminal uses @samp{DejaVuSansM Nerd Font Mono}: DejaVu Sans
+Mono, which has the Cyrillic, box-drawing and Braille characters
+raspdash draws, patched with the Nerd Fonts icon sets (weather symbols,
+hardware, logos).  The @samp{Mono} variant keeps every icon one cell
+wide, which is what the C library's @code{wcwidth} reports for them, so
+layouts line up.  At size 11 a 1920x1080 screen holds about
+190 columns by 54 lines.
+
+Install it for the user running the kiosk:
+
+@example
+mkdir -p ~/.local/share/fonts/DejaVuSansMNerd
+curl -L https://github.com/ryanoasis/nerd-fonts/releases/latest/download/DejaVuSansMono.tar.xz \
+  | tar -xJ -C ~/.local/share/fonts/DejaVuSansMNerd
+fc-cache -f ~/.local/share/fonts
+@end example
+
+On a terminal without a Nerd Font, set @code{icons = "unicode"} in
+@code{[app]} (@pxref{Application settings}) and raspdash uses standard
+Unicode symbols instead.
+
+@node Updating
+@section Updating
+@cindex updating
+
+Pull or copy the new sources onto the Pi and run
+@file{deploy/install-pi.sh} again.  Then restart the dashboard: press
+@kbd{q} (when @code{allow_quit} is on) and the launcher starts the new
+binary, or log out and back in.
+
+@node Invoking raspdash
+@chapter Invoking raspdash
+@cindex invoking
+@cindex options
+
+@example
+raspdash [@var{option}]@dots{}
+@end example
+
+@table @option
+@item -c @var{file}
+@itemx --config=@var{file}
+Read the configuration from @var{file}.
+@item -s @var{name}
+@itemx --screen=@var{name}
+Start on the screen whose tab title is @var{name}, such as
+@samp{Weather}.
+@item --check
+Fetch every source once, ignoring the cache's age, print one line per
+source (@samp{ok} or @samp{FAIL} with the reason) and exit with status 1
+if any failed.  This needs no terminal, so it is handy over
+@command{ssh} after changing the configuration.
+@item -h
+@itemx --help
+Print a usage summary and exit.
+@item -V
+@itemx --version
+Print the version and exit.
+@end table
+
+@cindex configuration file, location
+Without @option{--config}, raspdash uses the first of these that exists:
+@env{RASPDASH_CONFIG}; @file{config.toml} in the current directory;
+@file{$XDG_CONFIG_HOME/raspdash/config.toml} (by default
+@file{~/.config/raspdash/config.toml}); and
+@file{@var{sysconfdir}/raspdash/config.toml}.
+
+@menu
+* Keys::                        Keyboard commands.
+@end menu
+
+@node Keys
+@section Keys
+@cindex keys
+
+@table @kbd
+@item 1 @dots{} 9
+Show that screen.
+@item @key{RIGHT}
+@itemx @key{TAB}
+@itemx @key{SPC}
+@itemx l
+Next screen.
+@item @key{LEFT}
+@itemx S-@key{TAB}
+@itemx h
+Previous screen.
+@item r
+Fetch the current screen's data now.
+@item q
+Quit, when @code{allow_quit} is on.  Under the kiosk launcher raspdash
+starts again a few seconds later.
+@end table
+
+The footer shows, for each source of the current screen, how long ago
+it last succeeded, or the latest error.
+
+@node Configuration
+@chapter Configuration
+@cindex configuration
+@cindex @file{config.toml}
+
+The configuration is one TOML file, @file{config.toml} in the source
+tree.  It is personal (host addresses, task lists, places), so git
+ignores it; the tracked @file{config.example.toml} is the starting
+point:
+
+@example
+cp config.example.toml config.toml
+@end example
+
+@noindent
+@file{deploy/install-pi.sh} makes this copy itself when
+@file{config.toml} does not exist yet.
+
+Each screen reads its own table; the @code{[app]} table holds
+settings for the whole program.  Relative paths in the file are
+relative to the directory holding the file (after following symbolic
+links), so @samp{secrets/token.json} means the @file{secrets} directory
+beside @file{config.toml}.  A leading @samp{~/} means the home directory.
+
+Every screen's table takes an @code{interval} key: the number of seconds
+between fetches (@pxref{Sources and caching}).
+
+Changes take effect when raspdash starts again.
+
+@menu
+* Application settings::        The @code{[app]} table.
+@end menu
+
+@node Application settings
+@section Application settings
+@cindex @code{[app]}
+
+@table @code
+@item screens
+The screens to show, in tab order: any of @samp{"machines"},
+@samp{"tasks"}, @samp{"timetable"}, @samp{"weather"} and
+@samp{"markets"}.  Leave one out to hide it.  Default: all five.
+@item rotate_seconds
+Show each screen for this many seconds, then clear the terminal and
+show the next one; @samp{0} turns rotation off.  Default: 60.
+@item pause_after_key_seconds
+After a key press, do not rotate for this many seconds.  Default: 120.
+@item allow_quit
+Whether @kbd{q} quits.  Default: true.
+@item icons
+@samp{"nerd"} to draw Nerd Font icons, @samp{"unicode"} for standard
+Unicode symbols only (@pxref{Fonts}).  Default: @samp{"nerd"}.
+@item cache_dir
+Where fetched data is kept between runs.  Default:
+@file{$XDG_CACHE_HOME/raspdash}, that is @file{~/.cache/raspdash}.
+Deleting the directory makes every source fetch again at the next start.
+@item clock_format
+The header clock, as a @code{std::format} chrono specification such as
+@samp{"%a %d %b  %H:%M"}.  The clock uses the system time zone.
+@item user_agent
+The @samp{User-Agent} header sent with HTTP requests.  MET Norway's
+terms ask for one that identifies the application.  Default:
+@samp{raspdash/@var{version} (+https://github.com/mb6ockatf/raspdash)}.
+@end table
+
+HTTP requests honour the usual @env{http_proxy}, @env{https_proxy} and
+@env{no_proxy} environment variables.
+
+@node Secrets
+@chapter Secrets
+@cindex secrets
+@cindex credentials
+
+Credentials and tokens go into the @file{secrets/} directory beside
+@file{config.toml}.  Git ignores everything in it except its
+@file{README.md}, so they are never committed.  Keep the files readable
+only by you (@samp{chmod 600}).
+
+@table @file
+@item secrets/google_client_secret.json
+The OAuth client downloaded from Google Cloud (@pxref{Tasks}).
+@item secrets/google_token.json
+The refresh token written by @command{raspdash-auth}.
+@item secrets/keenetic.toml
+The router's login (@pxref{Machines}).
+@end table
+
+@include machines.texi
+@include tasks.texi
+@include timetable.texi
+@include weather.texi
+@include markets.texi
+
+@node Development
+@chapter Development
+@cindex development
+
+@menu
+* Source layout::               Where things are.
+* Adding a screen::             Writing a new module.
+* Internals::                   Contracts of the core classes.
+* Coding style::                Formatting and the pre-commit hook.
+* Tests::                       @samp{make check}.
+@end menu
+
+@node Source layout
+@section Source layout
+
+@table @file
+@item src/main.cpp
+Options, configuration lookup, building the screens.
+@item src/app.cpp
+The main loop: header tabs, clock, footer, keys, rotation.
+@item src/source.cpp
+@code{Source}, the base of all data sources: the poller thread, lazy
+scheduling, backoff and the cache; and @code{Latest<T>}.
+@item src/screen.hpp
+@code{Screen}, the base of all screens.
+@item src/tui.cpp
+Drawing helpers: UTF-8 text, frames, gauges, icons, the Braille canvas.
+@item src/http.cpp
+A small libcurl wrapper.
+@item src/config.cpp
+The configuration file.
+@item src/util.cpp
+Times, time zones and strings.
+@item src/@var{screen}.cpp
+One file per screen: its source, parsing, and drawing.
+@item agent/raspdash-stats.sh
+The script that reports a machine's statistics (@pxref{Machines}).
+@item deploy/
+The kiosk launcher, alacritty configuration, autostart entry and Pi
+install script.
+@item tests/
+@samp{make check} tests and the saved API responses they parse.
+@end table
+
+@node Adding a screen
+@section Adding a screen
+@cindex adding a screen
+
+A screen module defines a @code{Source} subclass and a @code{Screen}
+subclass, plus an install function that reads the module's
+configuration table:
+
+@itemize
+@item
+The source's @code{fetch} runs on its own thread.  It does blocking I/O,
+stores the result with @code{Latest<T>::set}, saves the raw response with
+@code{cache_put}, and throws on failure.  Keep the parsing in a separate
+function that takes the response body, so that tests can feed it saved
+responses.
+@item
+@code{restore} rebuilds the result from @code{cache_get} when raspdash
+starts and returns when that data was fetched.  @code{expired} may force
+a fetch before the interval is up.
+@item
+The screen's @code{draw} runs on the UI thread several times a second.
+It takes the latest result with @code{Latest<T>::get} and must never
+block.  Draw icons with @code{tui::icon}, giving a Unicode fallback.
+@item
+Declare the install function in @file{src/modules.hpp}, add it to the
+@code{modules} table there, and list the new files in
+@file{Makefile.am}.
+@end itemize
+
+@file{src/timetable.cpp} is a small, complete example.
+
+@node Internals
+@section Internals
+@cindex internals
+
+The source files carry no comments apart from their license notice;
+this section is where their contracts are written down.
+
+@subsection Sources
+@cindex @code{Source}
+@cindex @code{Latest}
+
+@code{Latest<T>} holds the newest value of a result.  @code{set} replaces
+it; @code{get} returns a @code{std::shared_ptr<const T>} snapshot that
+stays valid however long the reader keeps it, even if a newer value
+arrives meanwhile.  It is the only data shared between a source's thread
+and the UI thread.
+
+@code{Source} is constructed with a name (shown in the footer and used
+for cache file names), an interval and a retry delay (one minute by
+default, never more than the interval).
+
+@table @code
+@item start ()
+@itemx stop ()
+Start and stop the poller thread.  @code{stop} wakes the thread, asks it
+to finish and joins it.  The owner must call @code{stop} before the
+object is destroyed, because the thread calls the subclass's virtual
+functions; every subclass destructor calls @code{stop} too.
+@item status ()
+A copy of @code{Status}: @code{updated} (last success), @code{error_at}
+(last failure), @code{error} (empty after a success) and @code{busy}.
+@code{has_data} is true once anything was fetched or restored.
+@item refresh_now ()
+Wake the poller to fetch at once.
+@item poll_once ()
+Fetch synchronously on the calling thread and record the outcome; used
+by @option{--check}, never together with @code{start}.
+@item fetch ()
+Implemented by the subclass; runs on the poller thread, may block,
+stores the result and throws on failure.
+@item restore ()
+Called once on the poller thread before anything else.  The subclass
+rebuilds its result from the cache and returns the time that data was
+fetched, or @code{std::nullopt}.  An exception counts as
+@code{std::nullopt}.
+@item expired (@var{now})
+Return true to fetch before the interval is up.  It is asked at least
+every five minutes; an exception counts as true.
+@item cache_put (@var{key}, @var{body})
+@itemx cache_get (@var{key})
+Store and load one blob in @file{@var{cache_dir}/@var{name}-@var{key}}
+(characters other than letters, digits, @samp{-}, @samp{_} and @samp{.}
+become @samp{_}).  Writing goes through a temporary file and a rename,
+so a crash never leaves half a file.  The file's modification time is
+the @code{saved} time @code{cache_get} returns.  Failures are ignored.
+@code{Source::set_cache_dir} sets the directory once, from @code{App}.
+@end table
+
+The poller loop: a fetch is due when @code{refresh_now} was called, when
+there is no data, when the data is older than the interval, or when
+@code{expired} says so.  While the last fetch failed, the next attempt
+waits for the backoff instead, which starts at the retry delay and
+doubles after every further failure up to the interval or 30 minutes.
+Between checks the thread sleeps on a condition variable until the next
+due time, at most five minutes, and wakes early for @code{refresh_now}
+or @code{stop}.
+
+@subsection Screens and the application
+@cindex @code{Screen}
+@cindex @code{App}
+
+A @code{Screen} has a @code{title} for its tab, a list of
+@code{sources} for the footer and the @kbd{r} key, @code{draw}, which
+paints inside the rectangle between the header and footer lines, and
+@code{key}, which receives keys the application does not use and
+returns whether it used them.  @code{draw} is called about four times a
+second and must not block; an exception from it is shown in place of
+the screen.
+
+@code{App} owns the sources and screens.  @code{add_source} returns a
+typed reference so a screen can keep it.  @code{run} starts every
+source, then loops: draw the header (tabs and clock), the current
+screen and the footer; wait up to 250 ms for a key; rotate when due.
+SIGINT, SIGTERM and SIGHUP end the loop cleanly.  @code{check} runs
+every source's @code{poll_once} in parallel and prints the results.
+
+@subsection Drawing
+@cindex @code{tui}
+
+@code{tui::init} sets the locale from the environment and, if that
+locale is not UTF-8, switches character handling to @samp{C.UTF-8}; it
+sets @env{ESCDELAY} to 25 ms and starts ncurses with default colors.
+Colors are referred to by role (@code{NORMAL}, @code{DIM},
+@code{TITLE}, @code{ACCENT}, @code{GOOD}, @code{WARN}, @code{BAD},
+@code{FRAME}, the tab roles and four chart series) through
+@code{tui::attr}; with 256 colors the roles get a richer palette.
+@code{tui::level} maps a fraction to @code{GOOD}, @code{WARN} (from 0.7)
+or @code{BAD} (from 0.9).
+
+Text is UTF-8 throughout.  @code{width} counts terminal columns,
+@code{fit} truncates to a width ending in @samp{…}, @code{pad} pads or
+truncates to an exact width, and @code{put} draws clipped to a width and
+to the screen.  Invalid UTF-8 shows as U+FFFD.
+
+@code{Rect} is a rectangle of cells with helpers to shrink it
+(@code{inset}), cut rows off it (@code{top}, @code{below}) and split it
+into columns or rows with gaps, the last part taking the leftover
+cells.  @code{frame} draws a rounded box with a title and returns the
+inside.  @code{gauge} draws a bar with eighth-cell resolution over a
+dotted track.
+
+@code{Braille} is a canvas of 2@tie{}by@tie{}4 dots per cell, addressed
+from the top left; @code{set} and @code{line} (Bresenham) set dots and
+@code{draw} paints only the cells that have some.  @code{tui::icon}
+returns its first argument when Nerd Font icons are on and the second
+otherwise.
+
+@subsection HTTP, times and configuration
+
+@code{http::perform} sends a @code{Request} and returns the
+@code{Response}; it throws @code{http::Error} only for transport
+failures, not for HTTP error statuses.  Header names in the response are
+lower case.  @code{http::get} also throws for a non-2xx status, quoting
+the start of the body.  Redirects are followed, responses are
+decompressed, and proxies come from the environment.
+@code{http::global_init} sets the User-Agent for all requests.
+
+@code{util::zone} looks up an IANA time zone (the system's for an empty
+name) and throws if it is unknown; @code{util::to_local} converts a time
+point to that zone's wall clock.  @code{util::parse_iso8601} accepts
+@samp{YYYY-MM-DD}, optionally followed by @samp{T} or a space and
+@samp{HH:MM[:SS[.fraction]]}, and an offset @samp{Z}, @samp{+HH:MM} or
+@samp{-HH:MM}; without an offset the time is UTC.
+@code{util::format_age} gives ages such as @samp{5s}, @samp{12m},
+@samp{3h} and @samp{2d}.
+
+@code{Config::section} returns an empty table for a missing section, so
+modules can read keys with defaults unconditionally.  toml++ is compiled
+once, in @file{src/config.cpp}, with @code{TOML_IMPLEMENTATION}; every
+other file sees it with @code{TOML_HEADER_ONLY=0}.
+
+@subsection Test harness
+
+@file{tests/check.hpp} provides @code{CHECK (@var{condition})}, which
+reports the file and line of a failing check, @code{check::data}, which
+reads a fixture from @file{tests/data} through @env{srcdir} (so VPATH
+builds work), and @code{check::run}, which turns an escaped exception
+into exit status 99 (a hard error for Automake).  A test exits with 77
+to be reported as skipped.
+
+@node Coding style
+@section Coding style
+@cindex coding style
+@cindex astyle
+@cindex pre-commit hook
+
+The code follows the GNU style as Artistic Style formats it with its
+default GNU settings (@samp{astyle --style=gnu}).  A git pre-commit hook
+in @file{hooks/pre-commit} formats staged C++ files and stages the
+result; enable it once per clone with
+
+@example
+git config core.hooksPath hooks
+@end example
+
+@noindent
+If a file has both staged and unstaged changes the hook does not touch
+it; it refuses the commit and tells you to format and stage the file.
+Code in @file{third_party/} is left alone.
+
+The code must build with GCC 14, which is what the development laptop
+has, as well as with the newer GCC on the Pi.
+
+@node Tests
+@section Tests
+@cindex tests
+
+@samp{make check} runs one test program per module from
+@file{tests/}.  The tests parse saved responses from
+@file{tests/data/} and do not use the network.  For a live check of
+every source, run @samp{raspdash --check}.
+
+@node Copying
+@appendix Copying
+@cindex license
+@cindex GPL
+
+raspdash is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.  The full text is in the file
+@file{COPYING} of the distribution, and at
+@uref{https://www.gnu.org/licenses/gpl-3.0.html}.
+
+Weather forecasts are from MET Norway (@uref{https://api.met.no}),
+licensed under the Creative Commons Attribution 4.0 license (CC BY 4.0).
+
+The included toml++ library (@file{third_party/toml.hpp}) is by Mark
+Gillard, under the MIT license (@file{third_party/toml++-LICENSE}).
+
+@node Concept Index
+@unnumbered Concept Index
+
+@printindex cp
+
+@bye

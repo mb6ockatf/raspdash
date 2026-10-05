@@ -1,0 +1,189 @@
+@c tasks.texi -- the Tasks screen.
+@c Copyright (C) 2026 mb6ockatf
+@c This file is part of the raspdash manual; see raspdash.texi for the
+@c copying conditions.
+
+@node Tasks
+@chapter Google Tasks
+@cindex Google Tasks
+@cindex OAuth
+@cindex @command{raspdash-auth}
+
+The Tasks screen shows your Google Tasks lists, read-only: one column
+per list (stacked when the terminal is narrow), subtasks indented under
+their parents, due dates on the right and the first line of each task's
+notes under it.  A due date is shown in red when it has passed, as
+@samp{today} in the accent color, and in yellow when it is at most
+@code{soon_days} days away.
+
+raspdash reads the Google Tasks API with the
+@code{https://www.googleapis.com/auth/tasks.readonly} scope, so it can
+never change your tasks.  Google requires an OAuth client of your own
+for that, made once in the Google Cloud console.  The steps below take
+about ten minutes.
+
+@section Creating the OAuth client
+
+@enumerate
+@item
+Open @url{https://console.cloud.google.com/} with the Google account
+whose tasks you want to see.  In the project picker at the top choose
+@samp{New project}, name it, for example, @samp{raspdash}, and select
+it.
+
+@item
+Go to @samp{APIs & Services} @result{} @samp{Library}, search for
+@samp{Google Tasks API}, open it and press @samp{Enable}.
+
+@item
+Go to @samp{Google Auth Platform} (also reachable as @samp{APIs &
+Services} @result{} @samp{OAuth consent screen}) and press @samp{Get
+started}.  Under @samp{App Information} enter an @samp{App name}
+(@samp{raspdash}) and your address as @samp{User support email}.
+Under @samp{Audience} choose @samp{External}.  Enter your address
+again as contact information, accept the Google API Services User Data
+Policy and press @samp{Create}.
+
+@item
+Under @samp{Audience} @result{} @samp{Test users} press @samp{Add
+users} and add your own Google address.
+
+@item
+@cindex refresh token, 7-day expiry
+Still under @samp{Audience}, find @samp{Publishing status} and press
+@samp{Publish app}, then confirm, so the status reads @samp{In
+production}.
+
+@strong{Do not skip this step.}  While the status is @samp{Testing},
+Google issues refresh tokens that expire after 7 days; the Tasks
+screen would then stop working a week after setup with
+@samp{Google token revoked or expired}.  An app @samp{In production}
+does not need Google's verification for personal use: Google merely
+shows a warning during authorization (see below).
+
+@item
+Under @samp{Clients} press @samp{Create client}, choose the
+@samp{Application type} @samp{Desktop app}, give it any name and press
+@samp{Create}.
+
+@item
+In the dialog that follows press @samp{Download JSON}.  Do it right
+away: Google may not show the client secret again later, in which case
+you would have to add a new secret to the client.  Save the file as
+@file{secrets/google_client_secret.json} next to raspdash's
+@file{config.toml}.  It must contain an @code{"installed"} section; a
+file with a @code{"web"} section belongs to a client of the wrong type.
+@end enumerate
+
+@section Authorizing raspdash
+
+@command{raspdash-auth} runs the authorization once and saves a refresh
+token.  It needs a web browser, so run it on a computer that has one,
+such as your laptop, in a raspdash build or installation with the same
+@file{config.toml} and @file{secrets/google_client_secret.json}:
+
+@example
+raspdash-auth --config=config.toml
+@end example
+
+It listens on a random port of 127.0.0.1, prints a Google URL and tries
+to open it with @command{xdg-open}.  Sign in, and if Google says
+@samp{Google hasn't verified this app}, choose @samp{Advanced} and then
+@samp{Go to raspdash (unsafe)}: you are the developer of this app.
+Allow read access to Google Tasks.  The browser comes back to
+@command{raspdash-auth}, which writes @file{secrets/google_token.json}
+with mode 0600 and exits.
+
+Then copy the token to the Pi, next to the Pi's @file{config.toml}:
+
+@example
+scp secrets/google_token.json pi:raspdash/secrets/
+@end example
+
+The token file holds only what is needed to get short-lived access
+tokens; raspdash keeps those in memory and never writes them to its
+cache.  Keep the file private: anyone who has it, together with the
+client file, can read your tasks.  To revoke access, remove raspdash at
+@url{https://myaccount.google.com/permissions}.
+
+@command{raspdash-auth} accepts these options:
+
+@table @option
+@item -c @var{file}
+@itemx --config=@var{file}
+Read the paths of the client and token files from the @code{[tasks]}
+section of @var{file}.
+@item --client-secret=@var{file}
+@itemx --token=@var{file}
+Use these paths instead; with both, no configuration file is needed.
+@item -p @var{port}
+@itemx --port=@var{port}
+Listen on @var{port} instead of a random port.  This allows running
+@command{raspdash-auth} on the Pi itself over SSH with a tunnel, for
+example @samp{ssh -L 8085:127.0.0.1:8085 pi} and then
+@samp{raspdash-auth --port=8085 --no-browser} on the Pi, opening the
+printed URL in the laptop's browser.
+@item --no-browser
+Only print the URL.
+@end table
+
+@section Configuration
+
+@example
+[tasks]
+lists = ["My Tasks"]
+show_completed = false
+show_assigned = false
+show_notes = true
+soon_days = 2
+client_secret = "secrets/google_client_secret.json"
+token = "secrets/google_token.json"
+interval = 3600
+timezone = "Europe/Moscow"
+@end example
+
+@table @code
+@item lists
+Titles of the lists to show, in this order.  An empty array shows every
+list.  Titles that do not exist are named in a warning line above the
+lists.
+@item show_completed
+Also show completed tasks, including those hidden by Google's
+@samp{clear completed}, ticked and dimmed.  Default @code{false}.
+@item show_assigned
+Also show tasks assigned to you from Google Docs or Chat spaces.
+Default @code{false}.
+@item show_notes
+Show the first line of each open task's notes.  Default @code{true}.
+@item soon_days
+Highlight due dates up to this many days ahead.  Default 2.
+@item client_secret
+@itemx token
+The OAuth client file and the token file, relative to the configuration
+file's directory.
+@item interval
+Seconds between fetches.  Default 3600, once an hour; press @kbd{r} on
+the Tasks screen to fetch at once.  The last result is kept in the
+cache directory and shown immediately after a restart.  A cache saved
+with different @code{lists}, @code{show_completed} or
+@code{show_assigned} settings is not shown; raspdash fetches again at
+once instead.
+@item timezone
+Zone that decides which day is @samp{today} for due dates.  Default
+@samp{Europe/Moscow}.
+@end table
+
+@section Troubleshooting
+
+@table @samp
+@item no OAuth client file @dots{}
+@itemx no token @dots{}
+The file is missing; follow the steps above.
+@item Google token revoked or expired; rerun raspdash-auth
+The refresh token no longer works: access was revoked, the app was
+still in @samp{Testing} (7-day tokens), or it was unused for six
+months.  Make sure the app is @samp{In production}, run
+@command{raspdash-auth} again and copy the new token to the Pi.
+@item Google Tasks HTTP 403 @dots{}
+Usually the Google Tasks API is not enabled in the project.
+@end table

@@ -1,0 +1,72 @@
+@c timetable.texi -- the Timetable screen.
+@c Copyright (C) 2026 mb6ockatf
+@c This file is part of the raspdash manual; see raspdash.texi for the
+@c copying conditions.
+
+@node Timetable
+@chapter Timetable
+@cindex timetable
+@cindex RUZ
+@cindex ruz.spbstu.ru
+
+The Timetable screen shows this week's classes of one study group at
+Peter the Great St.@: Petersburg Polytechnic University, from the
+university's timetable service RUZ (@uref{https://ruz.spbstu.ru}).
+
+There is one column per day from Monday to Saturday, and one for Sunday
+when it has classes.  Each class shows its time, subject, kind (lecture,
+practice, lab), room and teacher.  Today's column is highlighted; past
+classes are dimmed, the class in progress is marked @samp{●} and the
+next one today @samp{▸}.  The heading gives the group, the week's dates
+and whether the week is odd or even.
+
+@section Data source
+
+raspdash uses RUZ's JSON interface, the one behind its web pages:
+
+@table @code
+@item GET /api/v1/ruz/search/groups?q=@var{name}
+finds the numeric id of the group named exactly @var{name}.
+@item GET /api/v1/ruz/scheduler/@var{id}?date=@var{yyyy-mm-dd}
+returns the Monday-to-Sunday week containing that date.
+@end table
+
+The interface is not documented and may change.  The week is fetched
+every three days, and as soon as a new week starts (by the date in the
+@code{timezone} below); the cached copy survives restarts
+(@pxref{Sources and caching}).
+
+@cindex retake groups
+A search can return several groups with similar names.  For example,
+@samp{5151003/50001_2025} next to @samp{5151003/50001} holds only
+retake sessions (@samp{Комиссия. Зачёт}).  raspdash takes the exact
+name match only.
+
+@section Settings
+@cindex @code{[timetable]}
+
+@table @code
+@item group
+The group's name exactly as RUZ spells it, such as
+@samp{"5151003/50001"}.  Required unless @code{group_id} is given.
+@item group_id
+The group's numeric RUZ id.  When given, raspdash skips the name
+search.  The id is in the address of the group's page on
+@uref{https://ruz.spbstu.ru}, for example @samp{/faculty/125/groups/45516}.
+@item interval
+Seconds between fetches.  Default: 259200 (three days).
+@item timezone
+The time zone the timetable is in, which decides what @dfn{today} and
+@dfn{this week} are.  Default: @samp{"Europe/Moscow"}.
+@item show_teachers
+Whether to show each class's teacher.  Default: true.
+@item api
+The base address of the interface.  Default:
+@samp{"https://ruz.spbstu.ru/api/v1/ruz"}.
+@end table
+
+@example
+[timetable]
+group = "5151003/50001"
+interval = 259200
+@end example

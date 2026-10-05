@@ -1,0 +1,23 @@
+2026-10-05  mb6ockatf
+
+	Initial version.
+
+	* configure.ac, Makefile.am, bootstrap: Autotools build with gnits
+	strictness, C++23, --enable-static-libstdcxx and
+	--enable-static-deps.
+	* src/app.cpp, src/source.cpp, src/tui.cpp, src/http.cpp,
+	src/config.cpp, src/util.cpp, src/main.cpp: Core: screen rotation,
+	lazy cached sources, drawing helpers, HTTP, configuration.
+	* src/machines.cpp, agent/raspdash-stats.sh: Machines screen.
+	* src/tasks.cpp, src/auth_main.cpp: Google Tasks screen and the
+	raspdash-auth OAuth helper.
+	* src/timetable.cpp: ruz.spbstu.ru timetable screen.
+	* src/weather.cpp: MET Norway weather screen.
+	* src/markets.cpp: Market charts screen.
+	* config.example.toml: Example configuration.
+	* deploy/: Kiosk launcher, alacritty configuration, autostart
+	entry, Pi installer, host authorization helper, plan for building
+	the libraries on the Pi.
+	* hooks/pre-commit: Format C++ with astyle --style=gnu.
+	* doc/: Texinfo manual.
+	* tests/: make check tests and saved API responses.

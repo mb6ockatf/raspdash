@@ -1,0 +1,8 @@
+{
+  "access_token": "ya29.a0AfakeAccessToken",
+  "expires_in": 3599,
+  "refresh_token": "1//0gFAKErefreshTOKEN",
+  "scope": "https://www.googleapis.com/auth/tasks.readonly",
+  "token_type": "Bearer",
+  "refresh_token_expires_in": 604799
+}

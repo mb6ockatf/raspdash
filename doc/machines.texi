@@ -1,0 +1,315 @@
+@c machines.texi -- the Machines screen.
+@c Copyright (C) 2026 mb6ockatf
+@c This file is part of the raspdash manual; see raspdash.texi for the
+@c copying conditions.
+
+@node Machines
+@chapter Machines
+
+The @dfn{Machines} screen shows one card per computer on the local
+network: whether it answers, its operating system and uptime, CPU usage
+with a short history chart, load average, memory, swap, root file
+system usage, temperatures and battery charge.  Each host is polled on
+its own thread, so a host that is switched off only marks its own card
+@samp{offline} and never delays the others.  The card of a host that
+has stopped answering keeps its last data, dimmed, and says for how
+long the host has been unreachable.
+
+Every host has a @code{kind} that selects how its statistics are
+collected (@pxref{Machine collectors}).  Hosts without an address are
+drawn as @samp{not configured} placeholders.
+
+@menu
+* Machine collectors::
+* Machine configuration::
+* Adding a host::
+* Router credentials::
+* Machines internals::
+@end menu
+
+@node Machine collectors
+@section Collectors
+
+@table @code
+@item local
+Runs the statistics script on the machine raspdash runs on (the Pi).
+
+@item ssh
+Runs the system @command{ssh} program in batch mode
+(@code{BatchMode=yes}, @code{ConnectTimeout=3}) and pipes the
+statistics script to @samp{sh -s} on the remote host.  Nothing has to
+be installed there.  @command{ssh} reads @file{~/.ssh/config} as usual,
+so a host alias works as an @code{address}.  If the key is restricted to
+a forced command (@pxref{Adding a host}), the remote side ignores the
+piped script and runs the installed copy instead; both ways produce the
+same output.  A poll that takes longer than @code{timeout} seconds is
+killed.
+
+@item keenetic
+Reads a Keenetic router through its web API.  raspdash requests
+@file{/auth}, which answers with a realm and a challenge, logs in with
+@math{sha256(challenge + md5(login:realm:password))} and then reads
+@file{/rci/show/system} (CPU load, memory, uptime) and
+@file{/rci/show/version} (model and firmware) with the session cookie.
+Keenetic routers report no temperatures.
+@end table
+
+The statistics script, @file{agent/raspdash-stats.sh}, is plain POSIX
+@command{sh} and needs nothing beyond the base system on GNU/Linux and
+macOS.  It prints @samp{key=value} lines; run it by hand to see what a
+host reports.  On GNU/Linux temperatures come from
+@file{/sys/class/hwmon} (or @file{/sys/class/thermal}); macOS has no
+temperature interface without extra tools, so a Mac shows temperatures
+only if @command{smctemp} or @command{osx-cpu-temp} is installed.
+@command{smctemp} reads CPU and GPU temperatures without root on both
+Apple Silicon and Intel Macs; it is not in Homebrew's main repository
+but in its author's tap:
+
+@example
+brew tap narugit/tap
+brew install narugit/tap/smctemp
+@end example
+
+@noindent
+The script adds @file{/opt/homebrew/bin} and @file{/usr/local/bin} to
+@env{PATH} on macOS, because the restricted login the Pi uses does not
+read the shell's start-up files.
+
+@node Machine configuration
+@section Configuration keys
+
+The @code{[machines]} table:
+
+@table @code
+@item interval
+Seconds between two polls of a host.  Default 10.
+@item timeout
+Seconds one poll may take before it is abandoned.  Default 15.
+@item history
+Number of CPU samples kept for the history chart.  Default 120.
+@item ssh_identity
+Private key used for @code{ssh} hosts that do not set @code{identity}.
+@item stats_script
+Path of the statistics script.  By default raspdash looks for
+@file{agent/raspdash-stats.sh} next to the configuration file, then in
+the installed data directory.
+@end table
+
+Each @code{[[machines.hosts]]} table describes one card, in screen
+order:
+
+@table @code
+@item name
+Card title.
+@item kind
+@code{local}, @code{ssh} or @code{keenetic}.
+@item address
+Host name, IP address or @file{~/.ssh/config} alias.  Leave it empty
+for a placeholder card.
+@item user
+@itemx port
+@itemx identity
+Passed to @command{ssh} as @option{-l}, @option{-p} and @option{-i}.
+@item ssh_options
+Array of extra @option{-o} options for @command{ssh}.
+@item credentials
+For @code{keenetic}: a TOML file with @code{login} and @code{password}.
+@item interval
+@itemx timeout
+Override the @code{[machines]} values for this host.
+@item enabled
+Set to @code{false} to show the card without polling the host.
+@end table
+
+raspdash remembers what each host is (operating system, kernel, number
+of CPUs) in its cache directory, so after a restart the card of an
+unreachable host still says what it is.  Measurements are never cached.
+
+@node Adding a host
+@section Adding a GNU/Linux or macOS host
+
+The Pi logs in with its own key, @file{~/.ssh/raspdash_ed25519}, which
+can be restricted on each host so that it can only print statistics.
+
+@cindex @command{authorize-host.sh}
+The quickest way is the helper in the source tree, run from a machine
+that can reach both the Pi (as @samp{ssh pi}) and the new host:
+
+@example
+deploy/authorize-host.sh user@@192.168.1.44
+@end example
+
+@noindent
+It asks for the host's password once, installs the statistics script as
+@file{~/.local/bin/raspdash-stats} there, adds the Pi's key to
+@file{~/.ssh/authorized_keys} with the restrictions shown below (keeping
+a backup in @file{authorized_keys.bak-raspdash}), and finally checks
+from the Pi that the login works.  @option{-k @var{keyfile}} authorizes
+another key, @option{-f @var{address}} sets the address the Pi connects
+from (default @samp{192.168.1.96}), and @option{-n} only prints what it
+would run on the host.  Then add the host to @file{config.toml}.
+
+The same steps by hand:
+
+@enumerate
+@item
+On the Pi, create the key once:
+
+@example
+ssh-keygen -t ed25519 -N '' -C raspdash@@raspberrypi \
+    -f ~/.ssh/raspdash_ed25519
+@end example
+
+@item
+On the new host, make sure an SSH server runs.  On Devuan:
+@samp{nala install openssh-server}.  On macOS: System Settings,
+General, Sharing, turn on @samp{Remote Login}.
+
+@item
+Copy the statistics script to the host:
+
+@example
+install -m 755 agent/raspdash-stats.sh ~/.local/bin/raspdash-stats
+@end example
+
+@item
+Append the Pi's public key (@file{~/.ssh/raspdash_ed25519.pub} on the
+Pi) to @file{~/.ssh/authorized_keys} on the host, on one line, prefixed
+with restrictions:
+
+@example
+command="/home/@var{user}/.local/bin/raspdash-stats",no-pty,
+no-port-forwarding,no-agent-forwarding,no-X11-forwarding,
+from="192.168.1.96" ssh-ed25519 AAAA@dots{} raspdash@@raspberrypi
+@end example
+
+@noindent
+(shown wrapped here; it must be a single line).  With
+@code{command=}, whatever the Pi asks to run, the host runs only
+@file{raspdash-stats}; @code{from=} accepts the key only from the Pi's
+address.  On macOS use @file{/Users/@var{user}/@dots{}}.
+
+@item
+Check from the Pi:
+
+@example
+ssh -i ~/.ssh/raspdash_ed25519 @var{user}@@@var{address}
+@end example
+
+@noindent
+It must print @samp{agent=1} followed by statistics.  The first
+connection records the host key (@code{StrictHostKeyChecking=accept-new}).
+
+@item
+Set @code{address} and @code{user} of the host's card in
+@file{config.toml}.
+@end enumerate
+
+Updating the script on a host means copying it again; a host whose key
+is not restricted always gets the current script through @samp{sh -s}.
+
+@node Router credentials
+@section Router credentials
+
+The @code{keenetic} collector needs the router's web login.  Create
+@file{secrets/keenetic.toml} (ignored by git) and make it readable only
+by you:
+
+@example
+login = "admin"
+password = "@var{router password}"
+@end example
+
+@example
+chmod 600 secrets/keenetic.toml
+@end example
+
+A separate router user with read-only rights is better than the admin
+account, if the firmware allows it.  Until the file exists, the router's
+card says @samp{no router credentials}.
+
+@node Machines internals
+@section Internals
+
+This section is for people changing @file{src/machines.cpp}.
+
+@subsubheading Sources and snapshots
+
+Each configured host gets its own @code{HostSource}, named after the
+host, with the host's @code{interval}; a failed poll is retried after at
+most 30 seconds.  A successful poll publishes a @code{Snapshot} (the
+parsed @code{Stats} plus a copy of the CPU history) through
+@code{Latest<Snapshot>}.  The history itself is a deque owned by the
+poller thread, trimmed to @code{history} samples.  @code{down_since()}
+is the start of the current run of failures (the epoch while the host
+answers); the card's @samp{offline} age is measured from it.  Cards for
+hosts without an address get no source at all.
+
+@code{restore()} reloads only the cached @samp{facts} (an
+@samp{agent=1} text with hostname, os, kernel and ncpu), publishes them
+as a snapshot without measurements, and returns @code{nullopt}, so the
+status stays @samp{connecting} (or becomes @samp{offline}) instead of
+claiming the host answered.  @code{fetch()} rewrites the facts cache
+only when they change, not on every poll.
+
+@subsubheading The statistics format
+
+@code{parse_stats} reads @samp{key=value} lines and requires an
+@samp{agent=} line; anything else (for example a shell's @samp{not
+found} message) is reported with its first 160 characters.  Byte counts
+may arrive in awk's exponent notation (@samp{7.95798e+09}) and are
+accepted.  Temperatures at or below 0.5 °C or at 150 °C and above are
+dropped: unused hwmon inputs read 0.  Temperatures are sorted hottest
+first.  Keys are @samp{temp.@var{chip}.@var{label}}; the script turns
+characters other than letters, digits, @samp{_}, @samp{+} and @samp{-}
+into @samp{_}, and the screen shows @samp{_} as a space.  A generic
+label such as @samp{temp1} is replaced by the chip name.
+
+@subsubheading Child processes
+
+@code{run_command} starts the child with @code{posix_spawnp} (safe in a
+multi-threaded program, unlike @code{fork}), with close-on-exec pipes so
+concurrent pollers never leak descriptors into each other's children.
+It writes the input and reads both outputs through @code{poll} on
+non-blocking descriptors, so a child that fills stdout or stderr
+cannot deadlock it.  A child that never reads its stdin (a forced
+command) makes the write fail with @code{EPIPE}; that is expected, and
+raspdash ignores @code{SIGPIPE} process-wide (in
+@code{install_machines}) so the failure is reported as an error code
+instead of a signal.  When the output is closed but the child has not
+exited, it waits until the deadline; at the deadline the child is sent
+@code{SIGKILL} and reaped.  @code{status} is the exit status, or -1 when
+the child was killed or did not exit normally.
+
+For @code{ssh}, exit status 255 means @command{ssh} itself failed; the
+first non-empty line of its stderr, without the @samp{ssh: } prefix,
+becomes the error.
+
+@subsubheading Keenetic
+
+A session cookie is kept between polls.  Each poll first tries
+@file{/rci/show/system} with it; only an HTTP 401 triggers a new login,
+so the password is not sent every ten seconds.  The cookie comes from
+the first @samp{Set-Cookie} header (name and value only).  Memory comes
+from @code{memtotal}, @code{memfree}, @code{membuffers} and
+@code{memcache} (KiB; available = free + buffers + cache); older
+firmware only has @code{memory} as @samp{@var{used}/@var{total}} KiB.
+@code{uptime} may be a number or a string.  The credentials file is
+read at login time, so it can be added without restarting raspdash.
+
+@subsubheading Card layout
+
+The grid uses as few rows of cards as the width allows (cards at least
+38 columns wide) and then as few columns as those rows need, which keeps
+cards wide.  Inside a card every line is a @code{Row} with a display
+@code{order}, a @code{priority} (lower is more important), a height and
+an optional @code{grow}.  Rows are picked by priority until the card is
+full, drawn in display order, and spare lines go to rows that can grow
+(the CPU history chart, up to 10 extra lines).  So a small terminal
+keeps the error, CPU, RAM and temperature lines and drops the rest.
+The label column is @code{label_w} cells wide: an icon from
+@code{tui::icon} and a word.  Data kept from before an outage is drawn
+dimmed, and only the hottest temperature gets the good/warn/bad colour;
+the others are plain unless they are warm themselves.  The history
+chart is a filled Braille area chart, newest sample on the right, with
+the time span it covers under the label.

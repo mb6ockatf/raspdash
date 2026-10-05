@@ -1,0 +1,14 @@
+{
+  "kind": "tasks#taskLists",
+  "etag": "\"LTk4NzY1NDMyMQ\"",
+  "items": [
+    {
+      "kind": "tasks#taskList",
+      "id": "c2hvcHBpbmctbGlzdC0x",
+      "etag": "\"LTQ0NDQ0NDQ0\"",
+      "title": "Shopping",
+      "updated": "2026-09-30T12:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/users/@me/lists/c2hvcHBpbmctbGlzdC0x"
+    }
+  ]
+}

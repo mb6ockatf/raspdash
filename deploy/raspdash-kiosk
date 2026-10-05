@@ -1,0 +1,68 @@
+#!/bin/sh
+# raspdash-kiosk -- run raspdash full screen in alacritty, forever.
+#
+# Copyright (C) 2026 mb6ockatf
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Started from the X session (see raspdash.desktop).  Keeps the screen
+# awake, then runs raspdash inside a full-screen alacritty and restarts
+# it whenever it exits or crashes.
+#
+# Environment:
+#   RASPDASH          raspdash binary          (default: next to this
+#                                              script, then PATH)
+#   RASPDASH_CONFIG   configuration file       (default: raspdash's search)
+#   RASPDASH_TERM_CONFIG  alacritty config     (default: next to this script,
+#                         then $datadir/raspdash/alacritty-kiosk.yml)
+#   RASPDASH_KEEP_SCREENSAVER=1  leave xscreensaver and DPMS alone
+
+set -u
+
+here=$(cd "$(dirname "$0")" && pwd)
+# The launcher is installed next to raspdash; the login session's PATH
+# may not include ~/.local/bin.
+if [ -n "${RASPDASH:-}" ]; then
+    bin=$RASPDASH
+elif [ -x "$here/raspdash" ]; then
+    bin=$here/raspdash
+else
+    bin=raspdash
+fi
+term_config=${RASPDASH_TERM_CONFIG:-}
+if [ -z "$term_config" ]; then
+    for c in "$here/alacritty-kiosk.yml" \
+             "$here/../share/raspdash/alacritty-kiosk.yml"; do
+        [ -r "$c" ] && { term_config=$c; break; }
+    done
+fi
+
+log_dir=${XDG_STATE_HOME:-$HOME/.local/state}/raspdash
+mkdir -p "$log_dir"
+log=$log_dir/kiosk.log
+
+if [ "${RASPDASH_KEEP_SCREENSAVER:-0}" != 1 ]; then
+    xset s off -dpms s noblank 2>/dev/null
+    command -v xscreensaver-command >/dev/null 2>&1 \
+        && xscreensaver-command -exit >/dev/null 2>&1
+fi
+
+# Hide the mouse pointer when unclutter is installed.
+command -v unclutter >/dev/null 2>&1 && { unclutter -idle 1 & }
+
+export LANG=${LANG:-C.UTF-8}
+
+while :; do
+    echo "$(date -Is) starting $bin" >>"$log"
+    if [ -n "$term_config" ]; then
+        alacritty --config-file "$term_config" --class raspdash -e "$bin" \
+            2>>"$log"
+    else
+        alacritty -o window.startup_mode=Fullscreen -e "$bin" 2>>"$log"
+    fi
+    echo "$(date -Is) exited with status $?" >>"$log"
+    sleep 3
+done

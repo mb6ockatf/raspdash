@@ -1,0 +1,16 @@
+{
+  "hostname": "Keenetic-1234",
+  "domainname": "WORKGROUP",
+  "cpuload": 7,
+  "memory": "41588/131072",
+  "swap": "0/0",
+  "memtotal": 131072,
+  "memfree": 70212,
+  "membuffers": 4096,
+  "memcache": 15176,
+  "swaptotal": 0,
+  "swapfree": 0,
+  "uptime": "431220",
+  "conntotal": 16384,
+  "connfree": 16200
+}

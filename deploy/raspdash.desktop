@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=raspdash
+Comment=Full-screen terminal dashboard
+Exec=sh -c 'exec "$HOME/.local/bin/raspdash-kiosk"'
+Terminal=false
+X-GNOME-Autostart-enabled=true

@@ -1,0 +1,16 @@
+{
+  "release": "4.2.5",
+  "sandbox": "stable",
+  "title": "4.2.5",
+  "arch": "mips",
+  "ndm": { "exact": "0-4c6a5e9", "cdate": "29 Aug 2025" },
+  "manufacturer": "Keenetic Ltd.",
+  "vendor": "Keenetic",
+  "series": "KN",
+  "model": "Starter",
+  "hw_version": "10218000",
+  "hw_id": "KN-1112",
+  "device": "Starter",
+  "region": "EA",
+  "description": "Keenetic Starter (KN-1112)"
+}
