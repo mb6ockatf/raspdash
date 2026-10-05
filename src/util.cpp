@@ -23,7 +23,14 @@
 
 #include <charconv>
 #include <format>
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
+
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <netinet/in.h>
 
 namespace util
 {
@@ -177,5 +184,71 @@ split (std::string_view s, char sep)
             start = pos + 1;
         }
     return out;
+}
+
+std::vector<Interface>
+ipv4_interfaces ()
+{
+    std::vector<Interface> found;
+    ifaddrs *list = nullptr;
+    if (getifaddrs (&list) != 0)
+        return found;
+    for (ifaddrs *entry = list; entry; entry = entry->ifa_next)
+        {
+            if (!entry->ifa_addr || entry->ifa_addr->sa_family != AF_INET
+                    || !(entry->ifa_flags & IFF_UP) || (entry->ifa_flags & IFF_LOOPBACK))
+                continue;
+            const auto *address = reinterpret_cast<const sockaddr_in *> (entry->ifa_addr);
+            Interface interface;
+            interface.name = entry->ifa_name;
+            interface.address_bits = ntohl (address->sin_addr.s_addr);
+            char text[INET_ADDRSTRLEN] = {};
+            inet_ntop (AF_INET, &address->sin_addr, text, sizeof text);
+            interface.address = text;
+            if (entry->ifa_netmask)
+                {
+                    std::uint32_t mask = ntohl (reinterpret_cast<const sockaddr_in *>
+                                                (entry->ifa_netmask)->sin_addr.s_addr);
+                    while (mask & 0x80000000u)
+                        {
+                            ++interface.prefix_length;
+                            mask <<= 1;
+                        }
+                }
+            found.push_back (std::move (interface));
+        }
+    freeifaddrs (list);
+    return found;
+}
+
+std::string
+default_route_interface (std::string_view proc_net_route)
+{
+    for (std::string_view line : split (proc_net_route, '\n'))
+        {
+            std::vector<std::string_view> fields;
+            for (std::string_view field : split (line, '\t'))
+                if (!trim (field).empty ())
+                    fields.push_back (trim (field));
+            if (fields.size () > 2 && fields[1] == "00000000" && fields[0] != "Iface")
+                return std::string (fields[0]);
+        }
+    return {};
+}
+
+std::optional<Interface>
+primary_ipv4 ()
+{
+    std::vector<Interface> interfaces = ipv4_interfaces ();
+    if (interfaces.empty ())
+        return std::nullopt;
+    std::ifstream route ("/proc/net/route");
+    std::string table ((std::istreambuf_iterator<char> (route)),
+                       std::istreambuf_iterator<char> ());
+    std::string preferred = default_route_interface (table);
+    for (const Interface &interface : interfaces)
+        if (interface.name == preferred)
+            return interface;
+    return interfaces.front ();
 }
 }

@@ -904,8 +904,12 @@ private:
             status_badge (r, std::format ("{} connecting", tui::icon ("\uF110", "…")), tui::DIM);
 
         std::vector<Row> rows;
-        std::string where = card.cfg.kind == Kind::local ? "local"
-                            : card.cfg.address;
+        std::string where = card.cfg.address;
+        if (card.cfg.kind == Kind::local)
+            {
+                std::optional<util::Interface> primary = util::primary_ipv4 ();
+                where = primary ? primary->address + " · local" : "local";
+            }
         if (failing)
             rows.push_back ({0, 0, 1, [&, in] (int y, int h)
             {

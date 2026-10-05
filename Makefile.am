@@ -38,7 +38,8 @@ libraspdash_a_SOURCES = \
 	src/tasks.cpp src/tasks.hpp \
 	src/timetable.cpp src/timetable.hpp \
 	src/weather.cpp src/weather.hpp \
-	src/markets.cpp src/markets.hpp
+	src/markets.cpp src/markets.hpp \
+	src/network.cpp src/network.hpp
 
 bin_PROGRAMS = src/raspdash src/raspdash-auth
 src_raspdash_SOURCES = src/main.cpp
@@ -52,7 +53,7 @@ dist_pkgdata_DATA = agent/raspdash-stats.sh config.example.toml
 info_TEXINFOS = doc/raspdash.texi
 doc_raspdash_TEXINFOS = \
 	doc/machines.texi doc/tasks.texi doc/timetable.texi \
-	doc/weather.texi doc/markets.texi
+	doc/weather.texi doc/markets.texi doc/network.texi
 
 check_PROGRAMS = \
 	tests/test_util \
@@ -60,7 +61,8 @@ check_PROGRAMS = \
 	tests/test_machines \
 	tests/test_tasks \
 	tests/test_weather \
-	tests/test_markets
+	tests/test_markets \
+	tests/test_network
 TESTS = $(check_PROGRAMS)
 AM_TESTS_ENVIRONMENT = srcdir='$(srcdir)'; export srcdir;
 tests_test_util_SOURCES = tests/test_util.cpp tests/check.hpp
@@ -69,6 +71,7 @@ tests_test_machines_SOURCES = tests/test_machines.cpp tests/check.hpp
 tests_test_tasks_SOURCES = tests/test_tasks.cpp tests/check.hpp
 tests_test_weather_SOURCES = tests/test_weather.cpp tests/check.hpp
 tests_test_markets_SOURCES = tests/test_markets.cpp tests/check.hpp
+tests_test_network_SOURCES = tests/test_network.cpp tests/check.hpp
 
 EXTRA_DIST = \
 	bootstrap \

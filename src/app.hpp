@@ -71,6 +71,7 @@ private:
     std::chrono::seconds pause_after_key_{120};
     bool allow_quit_ = true;
     std::string clock_format_;
+    bool show_ip_ = true;
     std::chrono::steady_clock::time_point switched_at_;
     std::chrono::steady_clock::time_point key_at_;
 };

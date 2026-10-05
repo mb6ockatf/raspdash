@@ -7,7 +7,9 @@
 @chapter Machines
 
 The @dfn{Machines} screen shows one card per computer on the local
-network: whether it answers, its operating system and uptime, CPU usage
+network: its address on the network (for the machine raspdash runs on,
+the address of its default-route interface), its operating system and
+uptime, CPU usage
 with a short history chart, load average, memory, swap, root file
 system usage, temperatures and battery charge.  Each host is polled on
 its own thread, so a host that is switched off never delays the others.

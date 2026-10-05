@@ -50,6 +50,7 @@ App::App (const Config &cfg) : cfg_ (cfg)
         = std::chrono::seconds (app["pause_after_key_seconds"].value_or (120));
     allow_quit_ = app["allow_quit"].value_or (true);
     clock_format_ = app["clock_format"].value_or<std::string> ("%a %d %b  %H:%M");
+    show_ip_ = app["show_ip"].value_or (true);
     std::string icons = app["icons"].value_or<std::string> ("nerd");
     if (icons != "nerd" && icons != "unicode")
         throw std::runtime_error ("[app] icons must be \"nerd\" or \"unicode\"");
@@ -124,6 +125,18 @@ App::draw_header (util::TimePoint now)
     int cw = tui::width (clock);
     if (COLS - cw - 1 > x)
         tui::put (0, COLS - cw - 1, clock, tui::attr (tui::TITLE));
+    else
+        return;
+    if (!show_ip_)
+        return;
+    std::optional<util::Interface> primary = util::primary_ipv4 ();
+    std::string address = std::format ("{} {}", tui::icon ("\U000F0317", "⇄"),
+                                       primary ? primary->address : "no network");
+    int address_width = tui::width (address);
+    int address_x = COLS - cw - 1 - 3 - address_width;
+    if (address_x > x + 1)
+        tui::put (0, address_x, address,
+                  tui::attr (primary ? tui::DIM : tui::BAD));
 }
 
 void

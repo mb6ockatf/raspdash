@@ -61,10 +61,11 @@ timetable, weather forecasts and market charts.
 * Configuration::               The @file{config.toml} file.
 * Secrets::                     Credentials and tokens.
 * Machines::                    Screen 1: computers on the network.
-* Tasks::                       Screen 2: Google Tasks.
-* Timetable::                   Screen 3: ruz.spbstu.ru timetable.
-* Weather::                     Screen 4: forecasts.
-* Markets::                     Screens 5 and 6: price charts.
+* Network::                     Screen 2: devices and services on the LAN.
+* Tasks::                       Screen 3: Google Tasks.
+* Timetable::                   Screen 4: ruz.spbstu.ru timetable.
+* Weather::                     Screen 5: forecasts.
+* Markets::                     Screens 6 and 7: price charts.
 * Development::                 Hacking on raspdash.
 * Copying::                     The license.
 * Concept Index::               Index of concepts.
@@ -79,12 +80,16 @@ with ncurses.  On the Pi it runs inside a full-screen alacritty window
 that the X session starts after automatic login (@pxref{Installing on the
 Pi}).
 
-The dashboard has five @dfn{screens}, shown one at a time:
+The dashboard has six kinds of @dfn{screens}, shown one at a time (the
+markets take two tabs, so there are seven):
 
 @enumerate
 @item
 @strong{Machines}: load, CPU, memory, disks and temperatures of the
 computers on the local network and of the router.
+@item
+@strong{Network}: the devices on the local network and the services
+(SSH, HTTP, @dots{}) each one offers, found by a port scan.
 @item
 @strong{Tasks}: read-only Google Tasks lists, chosen in the configuration.
 @item
@@ -118,6 +123,7 @@ only when its data is older than that:
 @multitable @columnfractions .3 .3 .4
 @headitem Screen @tab Default interval @tab Also fetched when
 @item Machines @tab 10 seconds @tab ---
+@item Network @tab 10 minutes @tab ---
 @item Tasks @tab 1 hour @tab ---
 @item Timetable @tab 3 days @tab a new week starts
 @item Weather @tab 2 hours @tab ---
@@ -457,6 +463,12 @@ Deleting the directory makes every source fetch again at the next start.
 @item clock_format
 The header clock, as a @code{std::format} chrono specification such as
 @samp{"%a %d %b  %H:%M"}.  The clock uses the system time zone.
+@item show_ip
+Whether the header shows this machine's IPv4 address on the local
+network, left of the clock.  It is the address of the interface that
+carries the default route, read again on every redraw, so it follows a
+DHCP change or a switch from Ethernet to Wi-Fi; @samp{no network} in red
+means no interface has an address.  Default @code{true}.
 @item user_agent
 The @samp{User-Agent} header sent with HTTP requests.  MET Norway's
 terms ask for one that identifies the application.  Default:
@@ -486,6 +498,7 @@ The router's login (@pxref{Machines}).
 @end table
 
 @include machines.texi
+@include network.texi
 @include tasks.texi
 @include timetable.texi
 @include weather.texi

@@ -9,7 +9,7 @@
 
 [app]
 # Screens in tab order.  Remove one to hide it.
-screens = ["machines", "tasks", "timetable", "weather", "markets"]
+screens = ["machines", "network", "tasks", "timetable", "weather", "markets"]
 # Switch to the next screen every N seconds (0 = never).
 rotate_seconds = 60
 # After a key press, stop rotating for N seconds.
@@ -23,6 +23,8 @@ icons = "nerd"
 # cache_dir = "~/.cache/raspdash"
 # std::format chrono spec for the header clock.
 clock_format = "%a %d %b  %H:%M"
+# Show this machine's LAN address next to the clock.
+show_ip = true
 
 [machines]
 # Seconds between polls of each host (live telemetry: keep it short).
@@ -164,3 +166,15 @@ max_age_hours = 100            # CBR publishes one rate per working day
 providers = [
   { type = "cbr", symbol = "R01235" },
 ]
+
+[network]
+# Scan the LAN of the default-route interface every N seconds.  Each scan
+# tries a TCP connection to every port below on every address of the
+# subnet (a /24 takes about 10 seconds).
+interval = 600
+# How long to wait for each connection, in milliseconds.
+timeout_ms = 700
+# Connections in flight at once.
+parallel = 256
+# subnet = "192.168.1.0/24"    # default: the interface's own subnet
+# ports = [ { port = 22, name = "ssh" }, { port = 80, name = "http" } ]

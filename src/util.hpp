@@ -44,4 +44,18 @@ std::string human_bytes (std::uint64_t bytes);
 
 std::string_view trim (std::string_view s);
 std::vector<std::string_view> split (std::string_view s, char sep);
+
+struct Interface
+{
+    std::string name;
+    std::string address;
+    std::uint32_t address_bits = 0;
+    int prefix_length = 0;
+};
+
+std::vector<Interface> ipv4_interfaces ();
+
+std::string default_route_interface (std::string_view proc_net_route);
+
+std::optional<Interface> primary_ipv4 ();
 }

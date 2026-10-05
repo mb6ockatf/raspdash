@@ -1,0 +1,97 @@
+@c network.texi -- the Network screen.
+@c Copyright (C) 2026 mb6ockatf
+@c This file is part of the raspdash manual; see raspdash.texi for the
+@c copying conditions.
+
+@node Network
+@chapter Network
+@cindex network scan
+@cindex open ports
+
+The @dfn{Network} screen lists the devices on the local network and the
+services each of them offers.  Every ten minutes raspdash tries a TCP
+connection to a list of well-known ports on every address of its own
+subnet, then shows one row per device: its address, a name, its MAC
+address and the open ports with the service names.  For SSH it adds the
+server's version from its greeting (@samp{OpenSSH_8.4p1
+Raspbian-5+deb11u7}), and for plain HTTP ports the @samp{Server} header
+of the answer to a @samp{HEAD} request.  The machine raspdash runs on
+is marked with @samp{★}.  The frame title gives the subnet, the
+interface, the number of devices, how long ago the scan ran and how long
+it took.
+
+The name of a device is the name of the @code{[machines]} host with the
+same address (the @code{local} host for raspdash's own machine) or, if
+none, the name the network's DNS server gives the address; @samp{?}
+means neither is known.
+
+@section How devices are found
+
+The scan uses ordinary TCP connections, so it needs no root privileges
+and no external tool such as @command{nmap}.  It keeps up to
+@code{parallel} connections in flight and gives each @code{timeout_ms}
+milliseconds; a /24 network with the default 22 ports takes 10 to 15
+seconds.  A port is open when the connection succeeds.  A device is
+listed when the kernel's ARP table (@file{/proc/net/arp}) has a complete
+entry for it after the scan, which happens for every device that
+answered the network at all, even one that refuses or ignores every
+port (a phone, for example).  Requiring the ARP entry also discards
+answers that a local proxy or VPN fakes for addresses where nothing
+exists.  When @code{subnet} names a network the Pi is not on, there is
+no ARP to rely on, and every address that answered is listed.
+
+UDP services (DNS over UDP, mDNS, DHCP) are not probed; DNS shows up
+only when the device also answers DNS over TCP on port 53.
+
+The last scan is kept in the cache directory and shown at once after a
+restart.
+
+@section Configuration
+
+@example
+[network]
+interval = 600
+timeout_ms = 700
+parallel = 256
+# subnet = "192.168.1.0/24"
+# ports = [ @{ port = 22, name = "ssh" @}, @{ port = 80, name = "http" @} ]
+@end example
+
+@table @code
+@item interval
+Seconds between scans.  Default 600.
+@item timeout_ms
+How long each connection attempt may take.  Default 700; raise it on a
+slow Wi-Fi network if devices are missing.
+@item parallel
+Connection attempts in flight at once, at most 900.  Default 256.
+@item subnet
+The network to scan, as @samp{@var{address}/@var{prefix}}.  Default:
+the subnet of the interface that carries the default route.  Subnets
+larger than a /22 are scanned as the /24 around the address.
+@item ports
+The ports to try, as inline tables with @code{port} and @code{name}.
+Default: ftp 21, ssh 22, telnet 23, dns 53, http 80, netbios 139, https
+443, smb 445, afp 548, ipp 631, mqtt 1883, rdp 3389, upnp 5000, vnc
+5900, airplay 7000, proxy 7890, http-alt 8080, home-assistant 8123,
+https-alt 8443, printer 9100, plex 32400 and iphone-sync 62078.  Port
+names that start with @samp{http} but not @samp{https} get the
+@samp{Server} header probe.
+@end table
+
+@section Internals
+
+@file{src/network.cpp} holds the scanner, the source and the screen;
+the parsing helpers are declared in @file{src/network.hpp} so that
+@file{tests/test_network.cpp} can test them.  @code{probe_all} keeps a
+queue of address and port pairs and a window of non-blocking sockets,
+waits on them with @code{poll} until the nearest deadline, and records
+each pair as open, refused or silent.  After the ARP table is read, one
+thread per device looks up the DNS name with @code{getnameinfo} and
+fetches the SSH greeting and HTTP headers, each within 1.5 seconds.
+The result is saved as @file{network-scan.json}.
+
+@code{util::primary_ipv4} picks the interface named on the default
+route in @file{/proc/net/route}, falling back to the first IPv4
+interface that is up; the header address (@pxref{Application
+settings}) and the local card on the Machines screen use it too.

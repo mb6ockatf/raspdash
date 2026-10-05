@@ -1,5 +1,21 @@
 2026-10-05  mb6ockatf
 
+	* src/network.cpp, src/network.hpp: New Network screen: a TCP port
+	scan of the local subnet listing each device's open ports, SSH
+	version and HTTP server.
+	* tests/test_network.cpp: New.
+	* src/modules.hpp: Register it.
+	* src/util.cpp, src/util.hpp (ipv4_interfaces)
+	(default_route_interface, primary_ipv4): New.
+	* src/app.cpp, src/app.hpp (App::draw_header): Show the machine's
+	LAN address left of the clock ([app] show_ip).
+	* src/machines.cpp (MachinesScreen::draw_card): Show the local
+	machine's address.
+	* Makefile.am, config.example.toml, README, doc/network.texi,
+	doc/raspdash.texi, doc/machines.texi: Document and build them.
+
+2026-10-05  mb6ockatf
+
 	* src/markets.cpp, src/markets.hpp: Draw every instrument over
 	several ranges (default a month and half a year) and split the
 	instruments over screens by their new "screen" key; add a line of
