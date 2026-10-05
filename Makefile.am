@@ -40,7 +40,8 @@ libraspdash_a_SOURCES = \
 	src/weather.cpp src/weather.hpp \
 	src/markets.cpp src/markets.hpp \
 	src/network.cpp src/network.hpp \
-	src/uptime.cpp src/uptime.hpp
+	src/uptime.cpp src/uptime.hpp \
+	src/xmr.cpp src/xmr.hpp
 
 bin_PROGRAMS = src/raspdash src/raspdash-auth
 src_raspdash_SOURCES = src/main.cpp
@@ -55,7 +56,8 @@ info_TEXINFOS = doc/raspdash.texi
 doc_raspdash_TEXINFOS = \
 	doc/machines.texi doc/tasks.texi doc/timetable.texi \
 	doc/weather.texi doc/markets.texi doc/network.texi \
-	doc/uptime.texi
+	doc/uptime.texi \
+	doc/xmr.texi
 
 check_PROGRAMS = \
 	tests/test_util \
@@ -65,7 +67,8 @@ check_PROGRAMS = \
 	tests/test_weather \
 	tests/test_markets \
 	tests/test_network \
-	tests/test_uptime
+	tests/test_uptime \
+	tests/test_xmr
 TESTS = $(check_PROGRAMS)
 AM_TESTS_ENVIRONMENT = srcdir='$(srcdir)'; export srcdir;
 tests_test_util_SOURCES = tests/test_util.cpp tests/check.hpp
@@ -76,6 +79,7 @@ tests_test_weather_SOURCES = tests/test_weather.cpp tests/check.hpp
 tests_test_markets_SOURCES = tests/test_markets.cpp tests/check.hpp
 tests_test_network_SOURCES = tests/test_network.cpp tests/check.hpp
 tests_test_uptime_SOURCES = tests/test_uptime.cpp tests/check.hpp
+tests_test_xmr_SOURCES = tests/test_xmr.cpp tests/check.hpp
 
 EXTRA_DIST = \
 	bootstrap \

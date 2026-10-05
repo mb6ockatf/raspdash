@@ -38,6 +38,7 @@ void install_weather (App &app);
 void install_markets (App &app);
 void install_network (App &app);
 void install_uptime (App &app);
+void install_xmr (App &app);
 
 inline constexpr Module modules[] =
 {
@@ -48,4 +49,5 @@ inline constexpr Module modules[] =
     {"weather", install_weather},
     {"markets", install_markets},
     {"network", install_network},
+    {"xmr", install_xmr},
 };

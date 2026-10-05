@@ -49,7 +49,7 @@ General Public License for more details.
 raspdash shows, on a terminal filling the Pi's screen, the state of the
 machines on the local network, their uptime and the power cuts they
 went through, Google Tasks lists, the week's university timetable,
-weather forecasts and market charts.
+weather forecasts, market charts and a Monero dashboard.
 
 @insertcopying
 @end ifnottex
@@ -68,6 +68,7 @@ weather forecasts and market charts.
 * Timetable::                   Screen 5: ruz.spbstu.ru timetable.
 * Weather::                     Screen 6: forecasts.
 * Markets::                     Screens 7 to 9: price charts.
+* XMR::                         Screen 10: Monero dashboard.
 * Development::                 Hacking on raspdash.
 * Copying::                     The license.
 * Concept Index::               Index of concepts.
@@ -82,8 +83,8 @@ with ncurses.  On the Pi it runs inside a full-screen alacritty window
 that the X session starts after automatic login (@pxref{Installing on the
 Pi}).
 
-The dashboard has seven kinds of @dfn{screens}, shown one at a time (the
-markets take three tabs, so there are nine):
+The dashboard has eight kinds of @dfn{screens}, shown one at a time (the
+markets take three tabs, so there are ten):
 
 @enumerate
 @item
@@ -107,6 +108,10 @@ St.@: Petersburg Polytechnic University, from @uref{https://ruz.spbstu.ru}.
 @strong{Markets}: candlestick charts with moving averages over a month
 and half a year, on two
 screens (XAUT and TON; BTC and USD/RUB), and a chart comparing them.
+@item
+@strong{XMR}: Monero on one page: market data, a 30-day price chart,
+the network and its recent blocks, P2Pool, a mining calculator and the
+state of your own @command{monerod}.
 @end enumerate
 
 @menu
@@ -136,6 +141,11 @@ only when its data is older than that:
 @item Timetable @tab 3 days @tab a new week starts
 @item Weather @tab 2 hours @tab ---
 @item Markets @tab 12 hours @tab ---
+@item XMR market @tab 10 minutes @tab ---
+@item XMR chart @tab 30 minutes @tab ---
+@item XMR network @tab 2 minutes @tab ---
+@item XMR pools @tab 5 minutes @tab ---
+@item XMR node @tab 30 seconds @tab ---
 @end multitable
 
 What a source fetches is also saved in the cache directory
@@ -437,7 +447,9 @@ links), so @samp{secrets/token.json} means the @file{secrets} directory
 beside @file{config.toml}.  A leading @samp{~/} means the home directory.
 
 Every screen's table takes an @code{interval} key: the number of seconds
-between fetches (@pxref{Sources and caching}).
+between fetches (@pxref{Sources and caching}).  The XMR screen has one
+such key per source instead, such as @code{market_interval}
+(@pxref{XMR}).
 
 Changes take effect when raspdash starts again.
 
@@ -512,6 +524,7 @@ The router's login (@pxref{Machines}).
 @include timetable.texi
 @include weather.texi
 @include markets.texi
+@include xmr.texi
 
 @node Development
 @chapter Development
