@@ -1,0 +1,25 @@
+# Alacritty configuration for the raspdash kiosk window.
+# Kept separate from the user's own alacritty configuration so their
+# terminal is unaffected.  TOML, as alacritty 0.13 and later expect.
+
+[env]
+TERM = "xterm-256color"
+LANG = "C.UTF-8"
+
+[window]
+startup_mode = "Fullscreen"
+decorations = "None"
+padding = { x = 4, y = 2 }
+title = "raspdash"
+dynamic_title = false
+
+[font]
+normal = { family = "DejaVuSansM Nerd Font Mono" }
+size = 11.0
+
+[mouse]
+hide_when_typing = true
+
+[colors.primary]
+background = "#0b0f14"
+foreground = "#c9d1d9"

@@ -241,7 +241,7 @@ It builds in @file{_build/}, runs the test suite, installs into
 @itemize
 @item
 installs @file{deploy/raspdash-kiosk} as @file{~/.local/bin/raspdash-kiosk}
-and @file{deploy/alacritty-kiosk.yml} into
+and @file{deploy/alacritty-kiosk.toml} into
 @file{~/.local/share/raspdash/};
 @item
 writes @file{~/.config/autostart/raspdash.desktop};
@@ -280,7 +280,7 @@ The raspdash binary to run (default: @command{raspdash} from
 The configuration file, passed on to raspdash.
 @item RASPDASH_TERM_CONFIG
 The alacritty configuration.  By default it uses
-@file{alacritty-kiosk.yml} next to the script or in
+@file{alacritty-kiosk.toml} next to the script or in
 @file{../share/raspdash/}.
 @end table
 
@@ -288,8 +288,10 @@ It logs starts and exits to
 @file{~/.local/state/raspdash/kiosk.log}.
 
 The alacritty configuration is kept apart from the user's own
-@file{~/.alacritty.yml}.  It is in YAML because the Pi's alacritty
-(0.13.0-dev) predates the TOML format.
+configuration.  It is in TOML, the format of alacritty 0.13 and later;
+alacritty 0.17 still reads YAML but shows a deprecation banner across
+the window, and ignores the full-screen setting under the Pi's
+@command{mutter}.
 
 @node Fonts
 @section Fonts

@@ -10,14 +10,16 @@ The @dfn{Machines} screen shows one card per computer on the local
 network: whether it answers, its operating system and uptime, CPU usage
 with a short history chart, load average, memory, swap, root file
 system usage, temperatures and battery charge.  Each host is polled on
-its own thread, so a host that is switched off only marks its own card
-@samp{offline} and never delays the others.  The card of a host that
-has stopped answering keeps its last data, dimmed, and says for how
-long the host has been unreachable.
+its own thread, so a host that is switched off never delays the others.
+Only hosts that answer get a card: a host whose last poll failed is
+left out, and the remaining cards share the whole screen, the last row
+stretching across the full width.  The host comes back as soon as it
+answers again.  When no host answers, the screen lists the offline
+ones by name.
 
 Every host has a @code{kind} that selects how its statistics are
-collected (@pxref{Machine collectors}).  Hosts without an address are
-drawn as @samp{not configured} placeholders.
+collected (@pxref{Machine collectors}).  Hosts without an address, or
+with @code{enabled = false}, are not shown.
 
 @menu
 * Machine collectors::
@@ -242,8 +244,9 @@ parsed @code{Stats} plus a copy of the CPU history) through
 @code{Latest<Snapshot>}.  The history itself is a deque owned by the
 poller thread, trimmed to @code{history} samples.  @code{down_since()}
 is the start of the current run of failures (the epoch while the host
-answers); the card's @samp{offline} age is measured from it.  Cards for
-hosts without an address get no source at all.
+answers).  Hosts without an address get no source at all.  The screen
+decides on every redraw which hosts to show: those with a source whose
+status carries no error.
 
 @code{restore()} reloads only the cached @samp{facts} (an
 @samp{agent=1} text with hostname, os, kernel and ncpu), publishes them

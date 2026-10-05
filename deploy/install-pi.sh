@@ -49,8 +49,8 @@ make -j"$jobs" check
 make install
 
 install -m 755 "$src/deploy/raspdash-kiosk" "$prefix/bin/raspdash-kiosk"
-install -D -m 644 "$src/deploy/alacritty-kiosk.yml" \
-    "$prefix/share/raspdash/alacritty-kiosk.yml"
+install -D -m 644 "$src/deploy/alacritty-kiosk.toml" \
+    "$prefix/share/raspdash/alacritty-kiosk.toml"
 
 autostart=${XDG_CONFIG_HOME:-$HOME/.config}/autostart
 mkdir -p "$autostart"

@@ -38,7 +38,7 @@ ssh_identity = "~/.ssh/raspdash_ed25519"
 # One table per machine.  kind = "local" (the machine raspdash runs on),
 # "ssh" (see 'info raspdash "Adding a host"') or "keenetic" (a Keenetic
 # router; its login goes into the credentials file).  A host with an
-# empty address shows as "not configured".
+# empty address is not shown.
 [[machines.hosts]]
 name = "pi"
 kind = "local"

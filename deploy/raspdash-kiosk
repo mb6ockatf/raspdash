@@ -17,7 +17,7 @@
 #                                              script, then PATH)
 #   RASPDASH_CONFIG   configuration file       (default: raspdash's search)
 #   RASPDASH_TERM_CONFIG  alacritty config     (default: next to this script,
-#                         then $datadir/raspdash/alacritty-kiosk.yml)
+#                         then $datadir/raspdash/alacritty-kiosk.toml)
 #   RASPDASH_KEEP_SCREENSAVER=1  leave xscreensaver and DPMS alone
 
 set -u
@@ -34,8 +34,8 @@ else
 fi
 term_config=${RASPDASH_TERM_CONFIG:-}
 if [ -z "$term_config" ]; then
-    for c in "$here/alacritty-kiosk.yml" \
-             "$here/../share/raspdash/alacritty-kiosk.yml"; do
+    for c in "$here/alacritty-kiosk.toml" \
+             "$here/../share/raspdash/alacritty-kiosk.toml"; do
         [ -r "$c" ] && { term_config=$c; break; }
     done
 fi

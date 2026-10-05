@@ -793,22 +793,44 @@ public:
     void
     draw (const tui::Rect &area, util::TimePoint now) override
     {
-        int n = static_cast<int> (cards_.size ());
-        if (n == 0)
+        if (cards_.empty ())
             {
                 tui::put (area.y + 1, area.x + 2, "No hosts in [machines].",
                           tui::attr (tui::DIM));
                 return;
             }
 
-        int maxcols = std::clamp (area.w / 38, 1, n);
-        int rows = (n + maxcols - 1) / maxcols;
-        int cols = (n + rows - 1) / rows;
-        std::vector<tui::Rect> row_rects = area.rows (rows, 0);
-        for (int i = 0; i < n; ++i)
+        std::vector<const Card *> shown;
+        std::vector<std::string> hidden;
+        for (const Card &card : cards_)
             {
-                std::vector<tui::Rect> cells = row_rects[i / cols].columns (cols, 0);
-                draw_card (cells[i % cols], cards_[i], now);
+                if (card.src && card.src->status ().error.empty ())
+                    shown.push_back (&card);
+                else
+                    hidden.push_back (card.cfg.name);
+            }
+        if (shown.empty ())
+            {
+                std::string names;
+                for (const std::string &name : hidden)
+                    names += (names.empty () ? "" : ", ") + name;
+                tui::put (area.y + 1, area.x + 2,
+                          tui::fit ("All hosts offline: " + names, area.w - 4),
+                          tui::attr (tui::DIM));
+                return;
+            }
+
+        int count = static_cast<int> (shown.size ());
+        int max_columns = std::clamp (area.w / 38, 1, count);
+        int row_count = (count + max_columns - 1) / max_columns;
+        int column_count = (count + row_count - 1) / row_count;
+        std::vector<tui::Rect> row_rects = area.rows (row_count, 0);
+        for (int index = 0; index < count; ++index)
+            {
+                int row = index / column_count;
+                int in_row = std::min (column_count, count - row * column_count);
+                std::vector<tui::Rect> cells = row_rects[row].columns (in_row, 0);
+                draw_card (cells[index % column_count], *shown[index], now);
             }
     }
 

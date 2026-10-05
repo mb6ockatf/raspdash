@@ -1,5 +1,16 @@
 2026-10-05  mb6ockatf
 
+	* src/machines.cpp (MachinesScreen::draw): Show only hosts that
+	answer, letting their cards fill the screen.
+	* doc/machines.texi: Document it.
+	* deploy/alacritty-kiosk.toml: New, replacing
+	deploy/alacritty-kiosk.yml: alacritty 0.17 showed a deprecation
+	banner for YAML and did not start full screen.
+	* deploy/raspdash-kiosk, deploy/install-pi.sh, doc/raspdash.texi:
+	Use it.
+
+2026-10-05  mb6ockatf
+
 	* configure.ac (--enable-static-libstdcxx): Link libatomic
 	statically too.
 	* Makefile.am (AM_CPPFLAGS): Include third_party as a system
