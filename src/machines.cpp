@@ -790,6 +790,16 @@ public:
         return out;
     }
 
+    std::vector<Source *>
+    footer_sources () const override
+    {
+        std::vector<Source *> answering;
+        for (const Card &card : cards_)
+            if (card.src && card.src->status ().error.empty ())
+                answering.push_back (card.src);
+        return answering;
+    }
+
     void
     draw (const tui::Rect &area, util::TimePoint now) override
     {

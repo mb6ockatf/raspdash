@@ -123,7 +123,7 @@ main ()
             markets::parse_cbr ("Too Many Requests");
         }));
 
-        auto week = markets::last_week (cb);
+        auto week = markets::last_span (cb, days{7});
         CHECK (week.size () == 169);
         CHECK (week.back ().t - week.front ().t == days{7});
 
@@ -194,5 +194,49 @@ main ()
             markets::provider_url ({"yahoo", "X"}, util::Clock::now ());
         }));
         CHECK (markets::default_charts ().size () == 4);
+
+        const markets::Range &month = markets::range_of (markets::Span::month);
+        const markets::Range &half_year
+        = markets::range_of (markets::Span::half_year);
+        CHECK (markets::find_range ("half-year") == &half_year);
+        CHECK (markets::find_range ("year") == nullptr);
+        CHECK (markets::provider_url ({"binance", "BTCUSDT"}, saved_at, month)
+        .ends_with ("&interval=4h&limit=180"));
+        CHECK (markets::provider_url ({"binance", "BTCUSDT"}, saved_at, half_year)
+        .ends_with ("&interval=1d&limit=183"));
+        CHECK (markets::provider_url ({"coingecko", "bitcoin"}, saved_at, half_year)
+        .ends_with ("&days=182"));
+        CHECK (markets::provider_url (rub, saved_at, month)
+               .starts_with ("https://www.cbr.ru/scripts/XML_dynamic.asp"
+                             "?date_req1=02/09/2026&"));
+
+        auto expanded = markets::expand_ranges (markets::default_charts (),
+        {month, half_year});
+        CHECK (expanded.size () == 8);
+        CHECK (expanded[0].name == "XAUT/USDT" && expanded[0].range.id == "month");
+        CHECK (expanded[1].name == "XAUT/USDT"
+               && expanded[1].range.id == "half-year");
+        CHECK (expanded[2].name == "TON/USDT" && expanded[2].screen == "XAUT · TON");
+        CHECK (expanded[4].name == "BTC/USD" && expanded[4].screen == "BTC · RUB");
+        CHECK (expanded[7].name == "USD/RUB"
+               && expanded[7].range.id == "half-year");
+
+        std::vector<markets::Point> daily;
+        for (int day_index = 0; day_index < 200; ++day_index)
+            daily.push_back ({saved_at - days{day_index}, 1.0});
+        std::ranges::reverse (daily);
+        CHECK (markets::last_span (daily, days{182}).size () == 183);
+
+        std::vector<markets::Point> rising
+        {
+            {saved_at - days{2}, 100}, {saved_at - days{1}, 110}, {saved_at, 105}
+        };
+        markets::Statistics stats = markets::statistics (rising);
+        CHECK (near (stats.open, 100) && near (stats.last, 105));
+        CHECK (near (stats.high, 110) && near (stats.low, 100));
+        CHECK (near (stats.average, 105) && near (stats.change_percent, 5));
+        CHECK (stats.from_high_percent < 0 && near (stats.from_low_percent, 5));
+        CHECK (stats.daily_volatility_percent > 9.9
+               && stats.daily_volatility_percent < 10.1);
     });
 }

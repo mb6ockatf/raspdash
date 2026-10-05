@@ -1,4 +1,4 @@
-/* markets.hpp -- week-long price charts.
+/* markets.hpp -- price charts over a week, a month or half a year.
 
    Copyright (C) 2026 mb6ockatf
 
@@ -44,6 +44,26 @@ struct Provider
     std::string label () const;
 };
 
+enum class Span
+{
+    week,
+    month,
+    half_year
+};
+
+struct Range
+{
+    Span span;
+    std::string id;
+    std::string label;
+    std::chrono::days length;
+    std::chrono::hours bucket;
+};
+
+const Range &range_of (Span span);
+
+const Range *find_range (std::string_view id);
+
 struct Chart
 {
     std::string name;
@@ -51,6 +71,8 @@ struct Chart
     int decimals = -1;
     std::chrono::hours max_age{6};
     std::vector<Provider> providers;
+    std::string screen = "Markets";
+    Range range = range_of (Span::week);
 };
 
 struct Result
@@ -70,11 +92,13 @@ std::vector<Point> parse_kraken (std::string_view body);
 std::vector<Point> parse_coingecko (std::string_view body);
 std::vector<Point> parse_cbr (std::string_view body);
 
-std::string provider_url (const Provider &p, util::TimePoint now);
+std::string provider_url (const Provider &p, util::TimePoint now,
+                          const Range &range = range_of (Span::week));
 
 std::vector<Point> parse (const Provider &p, std::string_view body);
 
-std::vector<Point> last_week (std::vector<Point> pts);
+std::vector<Point> last_span (std::vector<Point> points,
+                              std::chrono::days length);
 
 using Fetcher = std::function<std::string (const Provider &)>;
 
@@ -95,5 +119,23 @@ std::string format_price (double v, int decimals);
 
 int auto_decimals (double v);
 
+struct Statistics
+{
+    double open = 0;
+    double last = 0;
+    double high = 0;
+    double low = 0;
+    double average = 0;
+    double change_percent = 0;
+    double from_high_percent = 0;
+    double from_low_percent = 0;
+    double daily_volatility_percent = 0;
+};
+
+Statistics statistics (const std::vector<Point> &points);
+
 std::vector<Chart> default_charts ();
+
+std::vector<Chart> expand_ranges (const std::vector<Chart> &instruments,
+                                  const std::vector<Range> &ranges);
 }

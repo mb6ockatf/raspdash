@@ -109,24 +109,19 @@ timezone = "Europe/Moscow"
 interval = 43200
 # Day labels on the x axis are midnights in this zone.
 timezone = "Europe/Moscow"
+# Every instrument is drawn once per range, side by side: "week" (hourly
+# points), "month" (4- or 6-hourly) or "half-year" (daily).
+ranges = ["month", "half-year"]
 
-# Charts in screen order.  Providers are tried in order; the first one
-# with fresh data wins.  Without any [[markets.charts]] these four are
-# built in.  icon is a Nerd Font glyph, shown when [app] icons = "nerd".
-
-[[markets.charts]]
-name = "TON/USDT"
-icon = "\U000F01C8"            # md-diamond_stone
-decimals = 3
-max_age_hours = 6
-providers = [
-  { type = "kraken", symbol = "TONUSD" },
-  { type = "coingecko", symbol = "the-open-network", vs = "usd" },
-  { type = "binance", symbol = "TONUSDT" },
-]
+# Instruments in screen order.  Instruments with the same screen share a
+# screen, one row each; each screen gets its own tab.  Providers are
+# tried in order; the first one with fresh data wins.  Without any
+# [[markets.charts]] these four are built in.  icon is a Nerd Font
+# glyph, shown when [app] icons = "nerd".
 
 [[markets.charts]]
 name = "XAUT/USDT"
+screen = "XAUT · TON"
 icon = "\U000F124F"            # md-gold
 decimals = 1
 max_age_hours = 6              # Tether Gold trades around the clock
@@ -137,16 +132,20 @@ providers = [
 ]
 
 [[markets.charts]]
-name = "USD/RUB"
-icon = "\U000F01B1"            # md-currency_rub
-decimals = 2
-max_age_hours = 100            # CBR publishes one rate per working day
+name = "TON/USDT"
+screen = "XAUT · TON"
+icon = "\U000F01C8"            # md-diamond_stone
+decimals = 3
+max_age_hours = 6
 providers = [
-  { type = "cbr", symbol = "R01235" },
+  { type = "kraken", symbol = "TONUSD" },
+  { type = "coingecko", symbol = "the-open-network", vs = "usd" },
+  { type = "binance", symbol = "TONUSDT" },
 ]
 
 [[markets.charts]]
 name = "BTC/USD"
+screen = "BTC · RUB"
 icon = "\U000F0813"            # md-bitcoin
 decimals = 0
 max_age_hours = 6
@@ -154,4 +153,14 @@ providers = [
   { type = "coinbase", symbol = "BTC-USD" },
   { type = "kraken", symbol = "XBTUSD" },
   { type = "binance", symbol = "BTCUSDT" },
+]
+
+[[markets.charts]]
+name = "USD/RUB"
+screen = "BTC · RUB"
+icon = "\U000F01B1"            # md-currency_rub
+decimals = 2
+max_age_hours = 100            # CBR publishes one rate per working day
+providers = [
+  { type = "cbr", symbol = "R01235" },
 ]

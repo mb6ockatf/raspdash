@@ -42,4 +42,9 @@ public:
     }
 
     virtual std::vector<Source *> sources () const = 0;
+
+    virtual std::vector<Source *> footer_sources () const
+    {
+        return sources ();
+    }
 };

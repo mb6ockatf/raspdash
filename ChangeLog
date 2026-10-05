@@ -1,5 +1,20 @@
 2026-10-05  mb6ockatf
 
+	* src/markets.cpp, src/markets.hpp: Draw every instrument over
+	several ranges (default a month and half a year) and split the
+	instruments over screens by their new "screen" key; add a line of
+	statistics (open, average, distance from high and low, daily
+	volatility) to each chart.
+	* tests/test_markets.cpp: Test ranges, expansion and statistics.
+	* config.example.toml, doc/markets.texi, doc/raspdash.texi, README:
+	Document it.
+	* src/screen.hpp (Screen::footer_sources): New.
+	* src/machines.cpp (MachinesScreen::footer_sources): Leave hosts
+	that do not answer out of the footer.
+	* src/app.cpp (App::draw_footer): Use footer_sources.
+
+2026-10-05  mb6ockatf
+
 	* src/machines.cpp (MachinesScreen::draw): Show only hosts that
 	answer, letting their cards fill the screen.
 	* doc/machines.texi: Document it.

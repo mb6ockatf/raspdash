@@ -7,7 +7,8 @@ A full-screen terminal dashboard for a Raspberry Pi.  It shows:
   2. Tasks      -- Google Tasks lists (read-only)
   3. Timetable  -- this week's classes from ruz.spbstu.ru
   4. Weather    -- forecasts from MET Norway for configured cities
-  5. Markets    -- week-long price charts (TON/USDT, XAUT/USDT, USD/RUB, BTC/USD)
+  5-6. Markets  -- month and half-year price charts (XAUT/USDT, TON/USDT;
+                   BTC/USD, USD/RUB)
 
 Building from a git checkout:
 

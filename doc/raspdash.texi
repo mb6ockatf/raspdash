@@ -64,7 +64,7 @@ timetable, weather forecasts and market charts.
 * Tasks::                       Screen 2: Google Tasks.
 * Timetable::                   Screen 3: ruz.spbstu.ru timetable.
 * Weather::                     Screen 4: forecasts.
-* Markets::                     Screen 5: price charts.
+* Markets::                     Screens 5 and 6: price charts.
 * Development::                 Hacking on raspdash.
 * Copying::                     The license.
 * Concept Index::               Index of concepts.
@@ -93,7 +93,8 @@ St.@: Petersburg Polytechnic University, from @uref{https://ruz.spbstu.ru}.
 @item
 @strong{Weather}: forecasts from MET Norway for configured places.
 @item
-@strong{Markets}: week-long price charts.
+@strong{Markets}: price charts over a month and half a year, on two
+screens (XAUT and TON; BTC and USD/RUB).
 @end enumerate
 
 @menu
@@ -394,7 +395,8 @@ starts again a few seconds later.
 @end table
 
 The footer shows, for each source of the current screen, how long ago
-it last succeeded, or the latest error.
+it last succeeded, or the latest error.  On the Machines screen, hosts
+that do not answer are left out of the footer as well.
 
 @node Configuration
 @chapter Configuration
@@ -636,7 +638,8 @@ or @code{stop}.
 @cindex @code{App}
 
 A @code{Screen} has a @code{title} for its tab, a list of
-@code{sources} for the footer and the @kbd{r} key, @code{draw}, which
+@code{sources} for the @kbd{r} key and, unless it overrides
+@code{footer_sources}, for the footer, @code{draw}, which
 paints inside the rectangle between the header and footer lines, and
 @code{key}, which receives keys the application does not use and
 returns whether it used them.  @code{draw} is called about four times a

@@ -143,7 +143,7 @@ App::draw_footer (util::TimePoint now)
     std::vector<std::pair<std::string, tui::Role>> items;
     std::vector<Source::Status> healthy;
     std::vector<Source *> healthy_sources;
-    for (Source *s : screens_[current_]->sources ())
+    for (Source *s : screens_[current_]->footer_sources ())
         {
             Source::Status st = s->status ();
             if (!st.error.empty ())

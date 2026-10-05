@@ -1,4 +1,4 @@
-/* markets.cpp -- week-long price charts.
+/* markets.cpp -- price charts over a week, a month or half a year.
 
    Copyright (C) 2026 mb6ockatf
 
@@ -109,6 +109,30 @@ std::string
 Provider::label () const
 {
     return type + " " + symbol;
+}
+
+const Range &
+range_of (Span span)
+{
+    static const Range ranges[] =
+    {
+        {Span::week, "week", "7 days", days{7}, hours{1}},
+        {Span::month, "month", "1 month", days{30}, hours{6}},
+        {Span::half_year, "half-year", "6 months", days{182}, hours{24}},
+    };
+    return ranges[static_cast<std::size_t> (span)];
+}
+
+const Range *
+find_range (std::string_view id)
+{
+    for (Span span :
+            {
+                Span::week, Span::month, Span::half_year
+            })
+        if (range_of (span).id == id)
+            return &range_of (span);
+    return nullptr;
 }
 
 std::vector<Point>
@@ -225,34 +249,46 @@ parse_cbr (std::string_view body)
 }
 
 std::string
-provider_url (const Provider &p, util::TimePoint now)
+provider_url (const Provider &p, util::TimePoint now, const Range &range)
 {
+    auto pick = [&range] (std::string_view week, std::string_view month,
+                          std::string_view half_year)
+    {
+        return std::string (range.span == Span::week ? week
+                            : range.span == Span::month ? month : half_year);
+    };
     const std::string s = http::url_encode (p.symbol);
+    const std::string limit = pick ("168", "180", "183");
     if (p.type == "binance")
         return std::format ("https://api.binance.com/api/v3/klines?symbol={}"
-                            "&interval=1h&limit=168", s);
+                            "&interval={}&limit={}", s, pick ("1h", "4h", "1d"),
+                            limit);
     if (p.type == "bybit")
         return std::format ("https://api.bybit.com/v5/market/kline?category=spot"
-                            "&symbol={}&interval=60&limit=168", s);
+                            "&symbol={}&interval={}&limit={}", s,
+                            pick ("60", "240", "D"), limit);
     if (p.type == "okx")
         return std::format ("https://www.okx.com/api/v5/market/candles?instId={}"
-                            "&bar=1H&limit=168", s);
+                            "&bar={}&limit={}", s, pick ("1H", "4H", "1Dutc"),
+                            limit);
     if (p.type == "coinbase")
         return std::format ("https://api.exchange.coinbase.com/products/{}"
-                            "/candles?granularity=3600", s);
+                            "/candles?granularity={}", s,
+                            pick ("3600", "21600", "86400"));
     if (p.type == "kraken")
         return std::format ("https://api.kraken.com/0/public/OHLC?pair={}"
-                            "&interval=60&since={}", s,
-                            floor<seconds> (now - days{7})
+                            "&interval={}&since={}", s,
+                            pick ("60", "240", "1440"),
+                            floor<seconds> (now - range.length)
                             .time_since_epoch ().count ());
     if (p.type == "coingecko")
         return std::format ("https://api.coingecko.com/api/v3/coins/{}"
-                            "/market_chart?vs_currency={}&days=7", s,
-                            http::url_encode (p.vs));
+                            "/market_chart?vs_currency={}&days={}", s,
+                            http::url_encode (p.vs), range.length.count ());
     if (p.type == "cbr")
         {
-            auto from = year_month_day{floor<days> (util::to_local (now - days{10},
-                                                    moscow ()))};
+            auto from = year_month_day{floor<days> (util::to_local (
+                    now - range.length - days{3}, moscow ()))};
             auto to = year_month_day{floor<days> (util::to_local (now + days{1},
                                                   moscow ()))};
             return std::format ("https://www.cbr.ru/scripts/XML_dynamic.asp"
@@ -286,17 +322,17 @@ parse (const Provider &p, std::string_view body)
 }
 
 std::vector<Point>
-last_week (std::vector<Point> pts)
+last_span (std::vector<Point> points, days length)
 {
-    if (!pts.empty ())
+    if (!points.empty ())
         {
-            util::TimePoint from = pts.back ().t - days{7};
-            std::erase_if (pts, [from] (const Point &pt)
+            util::TimePoint from = points.back ().t - length;
+            std::erase_if (points, [from] (const Point &point)
             {
-                return pt.t < from;
+                return point.t < from;
             });
         }
-    return pts;
+    return points;
 }
 
 Result
@@ -308,10 +344,13 @@ fetch_chart (const Chart &chart, const Fetcher &fetch, util::TimePoint now)
             try
                 {
                     std::string body = fetch (p);
-                    std::vector<Point> pts = last_week (parse (p, body));
+                    std::vector<Point> pts = last_span (parse (p, body),
+                                                        chart.range.length);
                     if (pts.size () < 2)
-                        throw std::runtime_error ("no data for the last week");
-                    if (auto age = now - pts.back ().t; age > chart.max_age)
+                        throw std::runtime_error (std::format (
+                                                      "no data for the last {}", chart.range.label));
+                    if (auto age = now - pts.back ().t;
+                            age > chart.max_age + chart.range.bucket)
                         throw std::runtime_error (std::format (
                                                       "stale, last point {} old", util::format_age (pts.back ().t, now)));
                     res.points = std::move (pts);
@@ -403,38 +442,109 @@ auto_decimals (double v)
     return 5;
 }
 
+Statistics
+statistics (const std::vector<Point> &points)
+{
+    Statistics result;
+    if (points.empty ())
+        return result;
+    result.open = points.front ().v;
+    result.last = points.back ().v;
+    auto [low, high] = std::ranges::minmax (points
+                                            | std::views::transform (&Point::v));
+    result.low = low;
+    result.high = high;
+    double sum = 0;
+    for (const Point &point : points)
+        sum += point.v;
+    result.average = sum / static_cast<double> (points.size ());
+    auto percent = [] (double from, double to)
+    {
+        return from != 0 ? (to - from) / from * 100 : 0.0;
+    };
+    result.change_percent = percent (result.open, result.last);
+    result.from_high_percent = percent (result.high, result.last);
+    result.from_low_percent = percent (result.low, result.last);
+
+    std::vector<double> returns;
+    std::vector<util::TimePoint::duration> gaps;
+    for (std::size_t index = 1; index < points.size (); ++index)
+        if (points[index - 1].v > 0 && points[index].v > 0)
+            {
+                returns.push_back (std::log (points[index].v / points[index - 1].v));
+                gaps.push_back (points[index].t - points[index - 1].t);
+            }
+    if (returns.size () >= 2)
+        {
+            double mean = 0;
+            for (double value : returns)
+                mean += value;
+            mean /= static_cast<double> (returns.size ());
+            double variance = 0;
+            for (double value : returns)
+                variance += (value - mean) * (value - mean);
+            variance /= static_cast<double> (returns.size () - 1);
+            std::ranges::nth_element (gaps, gaps.begin () + gaps.size () / 2);
+            double typical_gap = duration<double> (gaps[gaps.size () / 2]).count ();
+            double per_day = typical_gap > 0 ? 86400.0 / typical_gap : 1.0;
+            result.daily_volatility_percent = std::sqrt (variance * per_day) * 100;
+        }
+    return result;
+}
+
 std::vector<Chart>
 default_charts ()
 {
     return
     {
         {
-            "TON/USDT", "\U000F01C8", 3, hours{6}, {
-                {"kraken", "TONUSD"},
-                {"coingecko", "the-open-network"},
-                {"binance", "TONUSDT"},
-            }
-        },
-        {
             "XAUT/USDT", "\U000F124F", 1, hours{6}, {
                 {"binance", "XAUTUSDT"},
                 {"bybit", "XAUTUSDT"},
                 {"coingecko", "tether-gold"},
-            }
+            }, "XAUT · TON"
         },
         {
-            "USD/RUB", "\U000F01B1", 2, hours{100}, {
-                {"cbr", "R01235"},
-            }
+            "TON/USDT", "\U000F01C8", 3, hours{6}, {
+                {"kraken", "TONUSD"},
+                {"coingecko", "the-open-network"},
+                {"binance", "TONUSDT"},
+            }, "XAUT · TON"
         },
         {
             "BTC/USD", "\U000F0813", 0, hours{6}, {
                 {"coinbase", "BTC-USD"},
                 {"kraken", "XBTUSD"},
                 {"binance", "BTCUSDT"},
-            }
+            }, "BTC · RUB"
+        },
+        {
+            "USD/RUB", "\U000F01B1", 2, hours{100}, {
+                {"cbr", "R01235"},
+            }, "BTC · RUB"
         },
     };
+}
+
+std::vector<Chart>
+expand_ranges (const std::vector<Chart> &instruments,
+               const std::vector<Range> &ranges)
+{
+    std::vector<std::string> screens;
+    for (const Chart &instrument : instruments)
+        if (std::ranges::find (screens, instrument.screen) == screens.end ())
+            screens.push_back (instrument.screen);
+    std::vector<Chart> charts;
+    for (const std::string &screen : screens)
+        for (const Chart &instrument : instruments)
+            if (instrument.screen == screen)
+                for (const Range &range : ranges)
+                    {
+                        Chart chart = instrument;
+                        chart.range = range;
+                        charts.push_back (std::move (chart));
+                    }
+    return charts;
 }
 
 namespace
@@ -473,12 +583,6 @@ protected:
     fetch () override
     {
         auto now = util::Clock::now ();
-        Fetcher get = [now] (const Provider &p)
-        {
-            http::Fields headers;
-            headers.emplace_back ("Accept", "application/json, text/xml");
-            return http::get (provider_url (p, now), std::move (headers));
-        };
 
         std::vector<ChartState> next = *state.get ();
         std::vector<bool> got (charts_.size (), false);
@@ -488,6 +592,14 @@ protected:
                 workers.emplace_back ([&, i]
                 {
                     ChartState &cs = next[i];
+                    const Range &range = charts_[i].range;
+                    Fetcher get = [now, &range] (const Provider &provider)
+                    {
+                        http::Fields headers;
+                        headers.emplace_back ("Accept", "application/json, text/xml");
+                        return http::get (provider_url (provider, now, range),
+                                          std::move (headers));
+                    };
                     try
                         {
                             cs.result = fetch_chart (charts_[i], get, now);
@@ -544,8 +656,9 @@ protected:
                 }))
                 return std::nullopt;
                 Result r;
-                r.points = last_week (parse (p, wrap.at ("body")
-                                             .get_ref<const std::string &> ()));
+                r.points = last_span (parse (p, wrap.at ("body")
+                                             .get_ref<const std::string &> ()),
+                                      charts_[i].range.length);
                 if (r.points.size () < 2)
                     return std::nullopt;
                 r.provider = p.label ();
@@ -571,7 +684,7 @@ private:
                 key += '-';
         while (key.back () == '-')
             key.pop_back ();
-        return key + ".json";
+        return key + "-" + c.range.id + ".json";
     }
 
     std::vector<Chart> charts_;
@@ -580,14 +693,16 @@ private:
 class MarketsScreen : public Screen
 {
 public:
-    MarketsScreen (MarketsSource &src, const time_zone *tz, seconds interval)
-        : src_ (src), tz_ (tz), interval_ (interval)
+    MarketsScreen (MarketsSource &src, const time_zone *tz, seconds interval,
+                   std::string title, std::vector<std::size_t> chart_indices)
+        : src_ (src), tz_ (tz), interval_ (interval), title_ (std::move (title)),
+          chart_indices_ (std::move (chart_indices))
     {
     }
 
     std::string title () const override
     {
-        return "Markets";
+        return title_;
     }
 
     std::vector<Source *> sources () const override
@@ -598,24 +713,44 @@ public:
     void
     draw (const tui::Rect &area, util::TimePoint now) override
     {
-        auto st = src_.state.get ();
+        auto states = src_.state.get ();
         const auto &charts = src_.charts ();
-        std::size_t n = charts.size ();
-        if (n == 0)
+        std::size_t count = chart_indices_.size ();
+        if (count == 0)
             return;
 
-        int ncols = area.w >= 90 && n > 1 ? 2 : 1;
-        int nrows = static_cast<int> ((n + ncols - 1) / ncols);
-        std::vector<tui::Rect> rows = area.rows (nrows, 0);
+        std::vector<std::string> range_ids;
+        std::vector<std::string> instruments;
+        for (std::size_t index : chart_indices_)
+            {
+                if (std::ranges::find (range_ids, charts[index].range.id)
+                        == range_ids.end ())
+                    range_ids.push_back (charts[index].range.id);
+                if (std::ranges::find (instruments, charts[index].name)
+                        == instruments.end ())
+                    instruments.push_back (charts[index].name);
+            }
+        int column_count = static_cast<int> (range_ids.size ());
+        if (column_count < 2)
+            column_count = area.w >= 90 && count > 1 ? 2 : 1;
+        else if (area.w < 45 * column_count)
+            column_count = 1;
+        int row_count = static_cast<int> ((count + column_count - 1) / column_count);
+        std::vector<tui::Rect> rows = area.rows (row_count, 0);
         static constexpr tui::Role series[] =
         {
             tui::SERIES1, tui::SERIES2, tui::SERIES3, tui::SERIES4
         };
-        for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t position = 0; position < count; ++position)
             {
-                std::vector<tui::Rect> cells = rows[i / ncols].columns (ncols, 0);
-                draw_chart (cells[i % ncols], charts[i], (*st)[i],
-                            series[i % 4], now);
+                const Chart &chart = charts[chart_indices_[position]];
+                std::size_t instrument = static_cast<std::size_t> (
+                                             std::ranges::find (instruments, chart.name) - instruments.begin ());
+                std::vector<tui::Rect> cells
+                    = rows[position / column_count].columns (column_count, 0);
+                draw_chart (cells[position % column_count], chart,
+                            (*states)[chart_indices_[position]],
+                            series[instrument % 4], now);
             }
     }
 
@@ -631,8 +766,8 @@ private:
         if (cs.result)
             {
                 util::TimePoint last = cs.result->points.back ().t;
-                title += std::format (" · {} ago · {}",
-                                      util::format_age (last, now),
+                title += std::format (" · {} · {} ago · {}", chart.range.label,
+                                      util::format_age (cs.fetched, now),
                                       cs.result->provider);
                 if (now - last > chart.max_age + interval_)
                     title_attr = tui::attr (tui::WARN);
@@ -680,7 +815,30 @@ private:
         if (in.right () - rw - 1 > x + 2)
             tui::put (in.y, in.right () - rw - 1, right, tui::attr (right_role));
 
-        int plot_h = in.h - 2;
+        Statistics stats = statistics (pts);
+        std::vector<std::string> details =
+        {
+            std::format ("open {}", format_price (stats.open, dec)),
+            std::format ("avg {}", format_price (stats.average, dec)),
+            std::format ("{}{:.1f}% from high", stats.from_high_percent < 0 ? "−" : "+",
+                         std::abs (stats.from_high_percent)),
+            std::format ("{}{:.1f}% from low", stats.from_low_percent < 0 ? "−" : "+",
+                         std::abs (stats.from_low_percent)),
+            std::format ("volatility {:.2f}%/day", stats.daily_volatility_percent),
+        };
+        int detail_x = in.x + 1;
+        for (const std::string &detail : details)
+            {
+                int detail_width = tui::width (detail);
+                if (detail_x + detail_width > in.right () - 1)
+                    break;
+                if (detail_x > in.x + 1)
+                    detail_x += tui::put (in.y + 1, detail_x, " · ",
+                                          tui::attr (tui::FRAME));
+                detail_x += tui::put (in.y + 1, detail_x, detail, tui::attr (tui::DIM));
+            }
+
+        int plot_h = in.h - 3;
         if (plot_h < 2)
             return;
         Axis axis = nice_axis (mn, mx, std::clamp (plot_h / 2 + 1, 2, 6));
@@ -692,7 +850,7 @@ private:
         int plot_w = in.right () - plot_x;
         if (plot_w < 4)
             return;
-        int top = in.y + 1;
+        int top = in.y + 2;
 
         tui::Braille canvas (plot_w, plot_h);
         auto ydot = [&] (double v)
@@ -701,7 +859,7 @@ private:
             return static_cast<int> (std::lround (f * (canvas.dots_h () - 1)));
         };
         util::TimePoint t1 = pts.back ().t;
-        util::TimePoint t0 = t1 - days{7};
+        util::TimePoint t0 = t1 - chart.range.length;
         auto xdot = [&] (util::TimePoint t)
         {
             double f = duration<double> (t - t0) / duration<double> (t1 - t0);
@@ -742,16 +900,33 @@ private:
 
         int xl = top + plot_h;
         tui::put (xl, plot_x - 1, "└", fa);
-        auto day0 = floor<days> (util::to_local (t0, tz_)) + days{1};
+        auto first_day = floor<days> (util::to_local (t0, tz_)) + days{1};
         int next_free = plot_x;
-        for (auto d = day0; tz_->to_sys (d) <= t1; d += days{1})
+        for (auto midnight = first_day; tz_->to_sys (midnight) <= t1; midnight += days{1})
             {
-                int col = plot_x + xdot (tz_->to_sys (d)) / 2;
-                std::string label = std::format ("{:%a %d}", d);
+                year_month_day date{midnight};
+                weekday day_of_week{midnight};
+                std::string label;
+                if (chart.range.span == Span::week)
+                    label = std::format ("{:%a %d}", midnight);
+                else if (chart.range.span == Span::month)
+                    {
+                        if (day_of_week != Monday)
+                            continue;
+                        label = std::format ("{:%d %b}", midnight);
+                    }
+                else
+                    {
+                        if (date.day () != day{1})
+                            continue;
+                        label = std::format ("{:%b}", midnight);
+                    }
+                int col = plot_x + xdot (tz_->to_sys (midnight)) / 2;
+                label = "╵" + label;
                 int lwid = tui::width (label);
                 if (col < next_free || col + lwid > in.right ())
                     continue;
-                tui::put (xl, col, "╵" + label.substr (0), tui::attr (tui::DIM));
+                tui::put (xl, col, label, tui::attr (tui::DIM));
                 next_free = col + lwid + 2;
             }
     }
@@ -778,6 +953,8 @@ private:
     MarketsSource &src_;
     const time_zone *tz_;
     seconds interval_;
+    std::string title_;
+    std::vector<std::size_t> chart_indices_;
 };
 
 std::vector<Chart>
@@ -799,6 +976,7 @@ read_charts (const toml::table &t)
             c.icon = (*ct)["icon"].value_or<std::string> ("");
             c.decimals = (*ct)["decimals"].value_or (-1);
             c.max_age = hours ((*ct)["max_age_hours"].value_or (6));
+            c.screen = (*ct)["screen"].value_or<std::string> ("Markets");
             if (const toml::array *ps = (*ct)["providers"].as_array ())
                 for (const toml::node &pn : *ps)
                     {
@@ -831,7 +1009,40 @@ install_markets (App &app)
     auto interval = seconds (t["interval"].value_or (43200));
     const time_zone *tz = util::zone (
                               t["timezone"].value_or<std::string> ("Europe/Moscow"));
+    std::vector<Range> ranges;
+    if (const toml::array *ids = t["ranges"].as_array ())
+        for (const toml::node &node : *ids)
+            {
+                std::string id = node.value_or<std::string> ("");
+                const Range *range = find_range (id);
+                if (!range)
+                    throw std::runtime_error (std::format (
+                                                  "[markets] ranges: unknown range '{}' (use week, month or "
+                                                  "half-year)", id));
+                ranges.push_back (*range);
+            }
+    else
+        ranges = {range_of (Span::month), range_of (Span::half_year)};
+    if (ranges.empty ())
+        throw std::runtime_error ("[markets] ranges is empty");
+
+    std::vector<Chart> charts = expand_ranges (read_charts (t), ranges);
+    std::vector<std::string> titles;
+    std::vector<std::vector<std::size_t>> members;
+    for (std::size_t index = 0; index < charts.size (); ++index)
+        {
+            auto found = std::ranges::find (titles, charts[index].screen);
+            if (found == titles.end ())
+                {
+                    titles.push_back (charts[index].screen);
+                    members.emplace_back ();
+                    found = titles.end () - 1;
+                }
+            members[static_cast<std::size_t> (found - titles.begin ())].push_back (index);
+        }
     auto &src = app.add_source (std::make_unique<MarketsSource> (
-                                    read_charts (t), interval));
-    app.add_screen (std::make_unique<MarketsScreen> (src, tz, interval));
+                                    std::move (charts), interval));
+    for (std::size_t screen = 0; screen < titles.size (); ++screen)
+        app.add_screen (std::make_unique<MarketsScreen> (src, tz, interval,
+                        titles[screen], members[screen]));
 }
