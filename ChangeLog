@@ -1,5 +1,22 @@
 2026-10-05  mb6ockatf
 
+	* src/uptime.cpp, src/uptime.hpp: New Uptime screen: each host's
+	uptime, last boot and a seven-day boot timeline, and the last power
+	cut, deduced from hosts that restarted together (or the router
+	restarting).  The boot history is kept in the cache directory.
+	* tests/test_uptime.cpp: New.
+	* src/modules.hpp: Register it.
+	* src/machines.cpp, src/machines.hpp (Kind): Move to the header.
+	(Host, Reading, hosts, kind_name): New.
+	(Snapshot): Record when it was taken.
+	(install_machines): Take the hosts from hosts, which creates their
+	sources once for both screens.
+	* src/app.hpp (App::shared): New.
+	* Makefile.am, config.example.toml, README, doc/uptime.texi,
+	doc/raspdash.texi, doc/machines.texi: Document and build them.
+
+2026-10-05  mb6ockatf
+
 	* src/tui.cpp, src/tui.hpp (PLOT_YELLOW, ...): New plot colours.
 	* src/markets.cpp, src/markets.hpp (Chart::color, known_color):
 	A fixed colour per instrument: XAUT yellow, TON blue, the dollar

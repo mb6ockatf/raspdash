@@ -37,10 +37,12 @@ void install_timetable (App &app);
 void install_weather (App &app);
 void install_markets (App &app);
 void install_network (App &app);
+void install_uptime (App &app);
 
 inline constexpr Module modules[] =
 {
     {"machines", install_machines},
+    {"uptime", install_uptime},
     {"tasks", install_tasks},
     {"timetable", install_timetable},
     {"weather", install_weather},

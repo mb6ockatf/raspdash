@@ -21,14 +21,23 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "util.hpp"
+
+class App;
+class Source;
+
 namespace machines
 {
+enum class Kind { local, ssh, keenetic };
+
 struct Temp
 {
     std::string chip;
@@ -69,6 +78,26 @@ struct CommandResult
     bool timed_out = false;
     std::string out, err;
 };
+
+struct Reading
+{
+    std::shared_ptr<const Stats> stats;
+    util::TimePoint taken{};
+    std::chrono::steady_clock::time_point taken_steady{};
+};
+
+struct Host
+{
+    std::string name;
+    Kind kind = Kind::ssh;
+    std::string address;
+    Source *source = nullptr;
+    std::function<Reading ()> read;
+};
+
+const std::vector<Host> &hosts (App &app);
+
+std::string_view kind_name (Kind kind);
 
 CommandResult run_command (const std::vector<std::string> &argv,
                            std::string_view input,
