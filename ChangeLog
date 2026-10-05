@@ -1,5 +1,15 @@
 2026-10-05  mb6ockatf
 
+	* configure.ac (--enable-static-libstdcxx): Link libatomic
+	statically too.
+	* Makefile.am (AM_CPPFLAGS): Include third_party as a system
+	directory, silencing toml++'s GCC 16 deprecation warnings.
+	* deploy/install-pi.sh, doc/raspdash.texi: GCC 16 is
+	/opt/gcc-16.2.0/bin/g++-16.
+	* deploy/TASK-build-deps.md: Likewise.
+
+2026-10-05  mb6ockatf
+
 	* deploy/TASK-build-deps.md: Record the GCC 16 prefix, the larger
 	swap, and the library sources already downloaded and verified on
 	the Pi.

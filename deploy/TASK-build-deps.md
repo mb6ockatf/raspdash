@@ -11,9 +11,10 @@ packages.
   RAM, 4 GiB swap. Raspbian 11 Bullseye, **32-bit armhf userland**
   (`arm-linux-gnueabihf`) on an aarch64 kernel, glibc 2.31.
 - Compiler: GCC 16.2.0 built by the user, configured with
-  `--prefix=/opt/gcc-16.2.0`. Below it is `$GCC16`. Check that
-  `$GCC16/bin/g++ --version` works before starting; if the prefix is
-  missing, GCC isn't installed yet.
+  `--prefix=/opt/gcc-16.2.0` and `--program-suffix=-16`, so the drivers
+  are `$GCC16/bin/gcc-16` and `$GCC16/bin/g++-16` (plain `gcc`/`g++`
+  symlinks to them live in `~/.local/opt/gcc-16/bin`). Below the prefix
+  is `$GCC16`.
 - The system's `-dev` packages (libncurses-dev, libcurl4-openssl-dev,
   libssl-dev, nlohmann-json3-dev) stay installed and untouched. The new
   libraries go into their own prefix and never into `/usr` or `/usr/local`.
@@ -64,7 +65,7 @@ series and record that in the report.
 ```sh
 export GCC16=/opt/gcc-16.2.0
 export PREFIX=/opt/raspdash-deps
-export CC=$GCC16/bin/gcc CXX=$GCC16/bin/g++
+export CC=$GCC16/bin/gcc-16 CXX=$GCC16/bin/g++-16
 # Pi 4 only: Cortex-A72, NEON, hard float (the 32-bit userland's ABI).
 export CFLAGS="-O2 -pipe -mcpu=cortex-a72 -mfpu=neon-fp-armv8 -mfloat-abi=hard"
 export CXXFLAGS="$CFLAGS"

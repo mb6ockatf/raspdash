@@ -12,7 +12,7 @@
 ACLOCAL_AMFLAGS = -I m4
 
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/src -I$(top_srcdir)/third_party \
+	-I$(top_srcdir)/src -isystem $(top_srcdir)/third_party \
 	-DSYSCONFDIR='"$(sysconfdir)"' \
 	-DPKGDATADIR='"$(pkgdatadir)"' \
 	-DTOML_HEADER_ONLY=0
@@ -43,6 +43,9 @@ libraspdash_a_SOURCES = \
 bin_PROGRAMS = src/raspdash src/raspdash-auth
 src_raspdash_SOURCES = src/main.cpp
 src_raspdash_auth_SOURCES = src/auth_main.cpp
+# Relink when configure changes the link flags, which live in Makefile.
+EXTRA_src_raspdash_DEPENDENCIES = Makefile
+EXTRA_src_raspdash_auth_DEPENDENCIES = Makefile
 
 dist_pkgdata_DATA = agent/raspdash-stats.sh config.example.toml
 

@@ -81,8 +81,13 @@ AC_ARG_ENABLE([static-libstdcxx],
   [AS_HELP_STRING([--enable-static-libstdcxx],
     [link libstdc++ and libgcc statically (for a compiler newer than the system)])],
   [], [enable_static_libstdcxx=no])
+# libatomic belongs to the compiler too: static OpenSSL asks for -latomic,
+# so take the compiler's libatomic.a rather than its shared library.
 AS_IF([test "x$enable_static_libstdcxx" = xyes],
-  [AC_SUBST([STATIC_CXX_LDFLAGS], ["-static-libstdc++ -static-libgcc"])])
+  [AC_SUBST([STATIC_CXX_LDFLAGS], ["-static-libstdc++ -static-libgcc"])
+   NCURSES_LIBS=`echo "$NCURSES_LIBS" | sed 's/-latomic\>/-l:libatomic.a/g'`
+   CURL_LIBS=`echo "$CURL_LIBS" | sed 's/-latomic\>/-l:libatomic.a/g'`
+   CRYPTO_LIBS=`echo "$CRYPTO_LIBS" | sed 's/-latomic\>/-l:libatomic.a/g'`])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

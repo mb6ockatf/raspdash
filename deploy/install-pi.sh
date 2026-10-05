@@ -10,7 +10,7 @@
 #
 # Run from the source tree on the Pi:
 #
-#   CXX=/opt/gcc-16/bin/g++ deploy/install-pi.sh
+#   CXX=/opt/gcc-16.2.0/bin/g++-16 deploy/install-pi.sh
 #
 # Installs into ~/.local (no root needed), links libstdc++ statically so a
 # compiler newer than the system's works, and adds an XDG autostart entry.
