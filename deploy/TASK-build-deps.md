@@ -8,26 +8,43 @@ packages.
 ## Context
 
 - Host: `ssh pi` (192.168.1.96), Raspberry Pi 4 Model B, 4 cores, 3.6 GiB
-  RAM, 99 MiB swap. Raspbian 11 Bullseye, **32-bit armhf userland**
+  RAM, 4 GiB swap. Raspbian 11 Bullseye, **32-bit armhf userland**
   (`arm-linux-gnueabihf`) on an aarch64 kernel, glibc 2.31.
-- Compiler: GCC 16 built by the user. Before starting, ask the user for its
-  install prefix if it isn't obvious (`ls /opt`, `which -a gcc-16 g++-16`).
-  Below it is `$GCC16`, e.g. `/opt/gcc-16`.
+- Compiler: GCC 16.2.0 built by the user, configured with
+  `--prefix=/opt/gcc-16.2.0`. Below it is `$GCC16`. Check that
+  `$GCC16/bin/g++ --version` works before starting; if the prefix is
+  missing, GCC isn't installed yet.
 - The system's `-dev` packages (libncurses-dev, libcurl4-openssl-dev,
   libssl-dev, nlohmann-json3-dev) stay installed and untouched. The new
   libraries go into their own prefix and never into `/usr` or `/usr/local`.
 - Passwordless `sudo` works on the Pi, but nothing here should need it
   except creating the prefix directory.
-- Memory is tight: use `make -j4` for C code. If anything is killed for
-  lack of memory, enlarge swap first (`/etc/dphys-swapfile`,
-  `CONF_SWAPSIZE=2048`, then `sudo dphys-swapfile setup && sudo
-  dphys-swapfile swapon`); ask the user before changing swap.
+- Use `make -j4`. Swap was enlarged to 4 GiB (`CONF_SWAPSIZE=4096` in
+  `/etc/dphys-swapfile`) for the GCC build, which is plenty for these
+  libraries; don't change it further without asking the user.
 
 ## Libraries and versions
 
 Latest stable releases as of 2026-10-05. Check for newer point releases
 before downloading, and verify every tarball (signature or published
 SHA-256) before building.
+
+The tarballs below are already downloaded and verified in
+`~/src/raspdash-deps` on the Pi (2026-10-05). `VERIFIED` there records
+each check and `SHA256SUMS` the hashes; the keys are in the private
+keyring `~/src/raspdash-deps/.gnupg`. Every signature was good, made by:
+
+| Tarball | Signing key |
+|---|---|
+| zlib-1.3.2.tar.gz | Mark Adler, `5ED46A6721D365587791E2AA783FCD8E58BCAFBA` |
+| openssl-4.0.3.tar.gz | OpenSSL, `B146647E45A7B33947AB226B2A2C87D161692D40` (listed on openssl-library.org/source); SHA-256 also matches the published `.sha256` |
+| curl-8.22.0.tar.xz | Daniel Stenberg, `27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2` |
+| ncurses-6.6.tar.gz | Thomas E. Dickey, `19882D92DDA4C400C22C0D56CC2AF4472167BE03` |
+| nlohmann-json-3.12.0.tar.xz | Niels Lohmann, `797167AE41C0A6D9232E48457F3CEA63AE251B69` |
+
+The nlohmann tarball is the release's `json.tar.xz`, renamed; it unpacks
+into `json/`. Unless a newer point release has appeared since, skip the
+download and start from these.
 
 | Library | Version | Source | Why raspdash needs it |
 |---|---|---|---|
@@ -45,7 +62,7 @@ series and record that in the report.
 ## Common settings
 
 ```sh
-export GCC16=/opt/gcc-16                 # ask the user
+export GCC16=/opt/gcc-16.2.0
 export PREFIX=/opt/raspdash-deps
 export CC=$GCC16/bin/gcc CXX=$GCC16/bin/g++
 # Pi 4 only: Cortex-A72, NEON, hard float (the 32-bit userland's ABI).

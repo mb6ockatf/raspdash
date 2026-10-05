@@ -1,5 +1,11 @@
 2026-10-05  mb6ockatf
 
+	* deploy/TASK-build-deps.md: Record the GCC 16 prefix, the larger
+	swap, and the library sources already downloaded and verified on
+	the Pi.
+
+2026-10-05  mb6ockatf
+
 	Initial version.
 
 	* configure.ac, Makefile.am, bootstrap: Autotools build with gnits
