@@ -1,5 +1,17 @@
 2026-10-05  mb6ockatf
 
+	* src/markets.cpp, src/markets.hpp: Candlestick charts (style),
+	fast and slow moving averages (moving_averages), the changes over
+	24 hours, 7 days, 30 days and 6 months, and a Compare screen with
+	every instrument rebased to 0% (compare).  Keep open, high and low
+	from the providers and fetch more history than is shown.
+	(moving_average, change_over, make_candles, candle_size)
+	(format_hours): New.
+	* tests/test_markets.cpp: Test them.
+	* config.example.toml, doc/markets.texi: Document them.
+
+2026-10-05  mb6ockatf
+
 	* src/tui.cpp, src/tui.hpp (PLOT_YELLOW, ...): New plot colours.
 	* src/markets.cpp, src/markets.hpp (Chart::color, known_color):
 	A fixed colour per instrument: XAUT yellow, TON blue, the dollar

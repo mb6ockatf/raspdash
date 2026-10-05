@@ -65,7 +65,7 @@ timetable, weather forecasts and market charts.
 * Tasks::                       Screen 3: Google Tasks.
 * Timetable::                   Screen 4: ruz.spbstu.ru timetable.
 * Weather::                     Screen 5: forecasts.
-* Markets::                     Screens 6 and 7: price charts.
+* Markets::                     Screens 6 to 8: price charts.
 * Development::                 Hacking on raspdash.
 * Copying::                     The license.
 * Concept Index::               Index of concepts.
@@ -98,8 +98,9 @@ St.@: Petersburg Polytechnic University, from @uref{https://ruz.spbstu.ru}.
 @item
 @strong{Weather}: forecasts from MET Norway for configured places.
 @item
-@strong{Markets}: price charts over a month and half a year, on two
-screens (XAUT and TON; BTC and USD/RUB).
+@strong{Markets}: candlestick charts with moving averages over a month
+and half a year, on two
+screens (XAUT and TON; BTC and USD/RUB), and a chart comparing them.
 @end enumerate
 
 @menu

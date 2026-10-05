@@ -21,6 +21,7 @@
 
 #include <chrono>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -33,6 +34,18 @@ struct Point
 {
     util::TimePoint t;
     double v = 0;
+    double open = 0;
+    double high = 0;
+    double low = 0;
+};
+
+struct Candle
+{
+    util::TimePoint start;
+    double open = 0;
+    double high = 0;
+    double low = 0;
+    double close = 0;
 };
 
 struct Provider
@@ -58,6 +71,9 @@ struct Range
     std::string label;
     std::chrono::days length;
     std::chrono::hours bucket;
+    std::chrono::days history;
+    std::chrono::hours fast_average;
+    std::chrono::hours slow_average;
 };
 
 const Range &range_of (Span span);
@@ -79,6 +95,7 @@ struct Chart
 struct Result
 {
     std::vector<Point> points;
+    std::vector<Point> history;
     std::string provider;
     Provider served;
     std::string body;
@@ -134,6 +151,21 @@ struct Statistics
 };
 
 Statistics statistics (const std::vector<Point> &points);
+
+std::vector<Point> moving_average (const std::vector<Point> &points,
+                                   std::chrono::hours window);
+
+std::optional<double> change_over (const std::vector<Point> &points,
+                                   std::chrono::hours period,
+                                   std::chrono::hours tolerance);
+
+std::vector<Candle> make_candles (const std::vector<Point> &points,
+                                  std::chrono::minutes size,
+                                  const std::chrono::time_zone *zone);
+
+std::chrono::minutes candle_size (std::chrono::days length, int max_candles);
+
+std::string format_hours (std::chrono::hours span);
 
 std::vector<Chart> default_charts ();
 

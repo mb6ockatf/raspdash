@@ -187,7 +187,7 @@ main ()
 
         markets::Provider rub{"cbr", "R01235"};
         CHECK (markets::provider_url (rub, saved_at)
-               == "https://www.cbr.ru/scripts/XML_dynamic.asp?date_req1=25/09/2026"
+               == "https://www.cbr.ru/scripts/XML_dynamic.asp?date_req1=22/09/2026"
                "&date_req2=06/10/2026&VAL_NM_RQ=R01235");
         CHECK (throws ([]
         {
@@ -201,14 +201,14 @@ main ()
         CHECK (markets::find_range ("half-year") == &half_year);
         CHECK (markets::find_range ("year") == nullptr);
         CHECK (markets::provider_url ({"binance", "BTCUSDT"}, saved_at, month)
-        .ends_with ("&interval=4h&limit=180"));
+        .ends_with ("&interval=4h&limit=240"));
         CHECK (markets::provider_url ({"binance", "BTCUSDT"}, saved_at, half_year)
-        .ends_with ("&interval=1d&limit=183"));
+        .ends_with ("&interval=1d&limit=240"));
         CHECK (markets::provider_url ({"coingecko", "bitcoin"}, saved_at, half_year)
-        .ends_with ("&days=182"));
+        .ends_with ("&days=240"));
         CHECK (markets::provider_url (rub, saved_at, month)
                .starts_with ("https://www.cbr.ru/scripts/XML_dynamic.asp"
-                             "?date_req1=02/09/2026&"));
+                             "?date_req1=23/08/2026&"));
 
         auto expanded = markets::expand_ranges (markets::default_charts (),
         {month, half_year});
@@ -236,6 +236,30 @@ main ()
         CHECK (near (stats.high, 110) && near (stats.low, 100));
         CHECK (near (stats.average, 105) && near (stats.change_percent, 5));
         CHECK (stats.from_high_percent < 0 && near (stats.from_low_percent, 5));
+        std::vector<markets::Point> hourly;
+        for (int hour_index = 0; hour_index <= 48; ++hour_index)
+            {
+                double price = 100 + hour_index;
+                hourly.push_back ({saved_at - hours{48 - hour_index}, price,
+                                   price - 0.5, price + 2, price - 1
+                                  });
+            }
+        auto average = markets::moving_average (hourly, hours{24});
+        CHECK (average.size () == 25);
+        CHECK (near (average.front ().v, 112.5) && near (average.back ().v, 136.5));
+        auto day_change = markets::change_over (hourly, hours{24}, hours{1});
+        CHECK (day_change && near (*day_change, (148.0 - 124.0) / 124.0 * 100));
+        CHECK (!markets::change_over (hourly, hours{72}, hours{1}));
+        auto day_candles = markets::make_candles (hourly, std::chrono::minutes{1440},
+                           util::zone ("UTC"));
+        CHECK (day_candles.size () >= 2 && day_candles.size () <= 3);
+        CHECK (near (day_candles.back ().close, 148) && day_candles.back ().high >= 148);
+        CHECK (day_candles.front ().low <= day_candles.front ().open);
+        CHECK (markets::candle_size (days{30}, 90) == std::chrono::minutes{480});
+        CHECK (markets::candle_size (days{182}, 90) == std::chrono::minutes{4320});
+        CHECK (markets::format_hours (hours{120}) == "5d");
+        CHECK (markets::format_hours (hours{36}) == "36h");
+
         CHECK (stats.daily_volatility_percent > 9.9
                && stats.daily_volatility_percent < 10.1);
     });

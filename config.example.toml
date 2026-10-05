@@ -114,6 +114,13 @@ timezone = "Europe/Moscow"
 # Every instrument is drawn once per range, side by side: "week" (hourly
 # points), "month" (4- or 6-hourly) or "half-year" (daily).
 ranges = ["month", "half-year"]
+# "candles" (OHLC candlesticks, sized to fit the width) or "line".
+style = "candles"
+# Draw a fast and a slow moving average over each chart (5 and 10 days
+# on month charts, 20 and 50 days on half-year charts).
+moving_averages = true
+# Add a "Compare" screen with every instrument rebased to 0% per range.
+compare = true
 
 # Instruments in screen order.  Instruments with the same screen share a
 # screen, one row each; each screen gets its own tab.  Providers are

@@ -85,16 +85,29 @@ sort_points (std::vector<Point> &pts)
     pts.erase (dup.begin (), dup.end ());
 }
 
-std::vector<Point>
-candles (const json &rows, bool ms, std::size_t close_idx)
+struct Columns
 {
-    std::vector<Point> pts;
-    for (const json &r : rows)
-        pts.push_back ({ms ? from_ms (r.at (0)) : from_s (r.at (0)),
-                        num (r.at (close_idx))
-                       });
-    sort_points (pts);
-    return pts;
+    std::size_t open, high, low, close;
+};
+
+constexpr Columns ohlc_columns{1, 2, 3, 4};
+
+std::vector<Point>
+candles (const json &rows, bool ms, Columns columns)
+{
+    std::vector<Point> points;
+    for (const json &row : rows)
+        {
+            Point point;
+            point.t = ms ? from_ms (row.at (0)) : from_s (row.at (0));
+            point.v = num (row.at (columns.close));
+            point.open = num (row.at (columns.open));
+            point.high = num (row.at (columns.high));
+            point.low = num (row.at (columns.low));
+            points.push_back (point);
+        }
+    sort_points (points);
+    return points;
 }
 
 const time_zone *
@@ -116,9 +129,18 @@ range_of (Span span)
 {
     static const Range ranges[] =
     {
-        {Span::week, "week", "7 days", days{7}, hours{1}},
-        {Span::month, "month", "1 month", days{30}, hours{6}},
-        {Span::half_year, "half-year", "6 months", days{182}, hours{24}},
+        {
+            Span::week, "week", "7 days", days{7}, hours{1}, days{10}, hours{24},
+            hours{72}
+        },
+        {
+            Span::month, "month", "1 month", days{30}, hours{6}, days{40},
+            hours{5 * 24}, hours{10 * 24}
+        },
+        {
+            Span::half_year, "half-year", "6 months", days{182}, hours{24},
+            days{240}, hours{20 * 24}, hours{50 * 24}
+        },
     };
     return ranges[static_cast<std::size_t> (span)];
 }
@@ -142,7 +164,7 @@ parse_binance (std::string_view body)
     if (j.is_object ())
         throw std::runtime_error (std::format ("binance: {}",
                                                j.value ("msg", "error")));
-    return candles (j, true, 4);
+    return candles (j, true, ohlc_columns);
 }
 
 std::vector<Point>
@@ -152,7 +174,7 @@ parse_bybit (std::string_view body)
     if (j.value ("retCode", -1) != 0)
         throw std::runtime_error (std::format ("bybit: {}",
                                                j.value ("retMsg", "error")));
-    return candles (j.at ("result").at ("list"), true, 4);
+    return candles (j.at ("result").at ("list"), true, ohlc_columns);
 }
 
 std::vector<Point>
@@ -162,7 +184,7 @@ parse_okx (std::string_view body)
     if (j.value ("code", "") != "0")
         throw std::runtime_error (std::format ("okx: {}",
                                                j.value ("msg", "error")));
-    return candles (j.at ("data"), true, 4);
+    return candles (j.at ("data"), true, ohlc_columns);
 }
 
 std::vector<Point>
@@ -172,7 +194,7 @@ parse_coinbase (std::string_view body)
     if (j.is_object ())
         throw std::runtime_error (std::format ("coinbase: {}",
                                                j.value ("message", "error")));
-    return candles (j, false, 4);
+    return candles (j, false, Columns{3, 2, 1, 4});
 }
 
 std::vector<Point>
@@ -184,7 +206,7 @@ parse_kraken (std::string_view body)
                                                err.front ().get<std::string> ()));
     for (const auto &[key, rows] : j.at ("result").items ())
         if (key != "last" && rows.is_array ())
-            return candles (rows, false, 4);
+            return candles (rows, false, ohlc_columns);
     throw std::runtime_error ("kraken: no data");
 }
 
@@ -199,7 +221,7 @@ parse_coingecko (std::string_view body)
         throw std::runtime_error (std::format (
                                       "coingecko: {}", e->is_string () ? e->get<std::string> ()
                                       : e->dump ()));
-    return candles (j.at ("prices"), true, 1);
+    return candles (j.at ("prices"), true, Columns{1, 1, 1, 1});
 }
 
 std::vector<Point>
@@ -242,7 +264,8 @@ parse_cbr (std::string_view body)
             std::ranges::replace (value, ',', '.');
             double nominal = to_double (util::trim (element (rec, "Nominal")));
             auto t = moscow ()->to_sys (local_days{ymd});
-            pts.push_back ({t, to_double (value) / (nominal > 0 ? nominal : 1)});
+            double rate = to_double (value) / (nominal > 0 ? nominal : 1);
+            pts.push_back ({t, rate, rate, rate, rate});
         }
     sort_points (pts);
     return pts;
@@ -258,7 +281,7 @@ provider_url (const Provider &p, util::TimePoint now, const Range &range)
                             : range.span == Span::month ? month : half_year);
     };
     const std::string s = http::url_encode (p.symbol);
-    const std::string limit = pick ("168", "180", "183");
+    const std::string limit = "240";
     if (p.type == "binance")
         return std::format ("https://api.binance.com/api/v3/klines?symbol={}"
                             "&interval={}&limit={}", s, pick ("1h", "4h", "1d"),
@@ -279,16 +302,16 @@ provider_url (const Provider &p, util::TimePoint now, const Range &range)
         return std::format ("https://api.kraken.com/0/public/OHLC?pair={}"
                             "&interval={}&since={}", s,
                             pick ("60", "240", "1440"),
-                            floor<seconds> (now - range.length)
+                            floor<seconds> (now - range.history)
                             .time_since_epoch ().count ());
     if (p.type == "coingecko")
         return std::format ("https://api.coingecko.com/api/v3/coins/{}"
                             "/market_chart?vs_currency={}&days={}", s,
-                            http::url_encode (p.vs), range.length.count ());
+                            http::url_encode (p.vs), range.history.count ());
     if (p.type == "cbr")
         {
             auto from = year_month_day{floor<days> (util::to_local (
-                    now - range.length - days{3}, moscow ()))};
+                    now - range.history - days{3}, moscow ()))};
             auto to = year_month_day{floor<days> (util::to_local (now + days{1},
                                                   moscow ()))};
             return std::format ("https://www.cbr.ru/scripts/XML_dynamic.asp"
@@ -344,8 +367,9 @@ fetch_chart (const Chart &chart, const Fetcher &fetch, util::TimePoint now)
             try
                 {
                     std::string body = fetch (p);
-                    std::vector<Point> pts = last_span (parse (p, body),
-                                                        chart.range.length);
+                    std::vector<Point> history = last_span (parse (p, body),
+                                                            chart.range.history);
+                    std::vector<Point> pts = last_span (history, chart.range.length);
                     if (pts.size () < 2)
                         throw std::runtime_error (std::format (
                                                       "no data for the last {}", chart.range.label));
@@ -354,6 +378,7 @@ fetch_chart (const Chart &chart, const Fetcher &fetch, util::TimePoint now)
                         throw std::runtime_error (std::format (
                                                       "stale, last point {} old", util::format_age (pts.back ().t, now)));
                     res.points = std::move (pts);
+                    res.history = std::move (history);
                     res.provider = p.label ();
                     res.served = p;
                     res.body = std::move (body);
@@ -490,6 +515,101 @@ statistics (const std::vector<Point> &points)
             result.daily_volatility_percent = std::sqrt (variance * per_day) * 100;
         }
     return result;
+}
+
+std::vector<Point>
+moving_average (const std::vector<Point> &points, hours window)
+{
+    std::vector<Point> averaged;
+    if (points.empty ())
+        return averaged;
+    double sum = 0;
+    std::size_t oldest = 0;
+    for (std::size_t index = 0; index < points.size (); ++index)
+        {
+            sum += points[index].v;
+            while (points[oldest].t <= points[index].t - window)
+                sum -= points[oldest++].v;
+            if (points[index].t - window >= points.front ().t)
+                {
+                    double value = sum / static_cast<double> (index - oldest + 1);
+                    averaged.push_back ({points[index].t, value, value, value, value});
+                }
+        }
+    return averaged;
+}
+
+std::optional<double>
+change_over (const std::vector<Point> &points, hours period, hours tolerance)
+{
+    if (points.size () < 2)
+        return std::nullopt;
+    util::TimePoint target = points.back ().t - period;
+    if (points.front ().t > target + tolerance)
+        return std::nullopt;
+    const Point *base = &points.front ();
+    for (const Point &point : points)
+        if (point.t <= target)
+            base = &point;
+        else
+            break;
+    if (base->v == 0)
+        return std::nullopt;
+    return (points.back ().v - base->v) / base->v * 100;
+}
+
+std::vector<Candle>
+make_candles (const std::vector<Point> &points, minutes size,
+              const time_zone *zone)
+{
+    std::vector<Candle> result;
+    long long current_key = 0;
+    for (const Point &point : points)
+        {
+            bool has_range = point.high != 0 || point.low != 0;
+            double open = has_range ? point.open : point.v;
+            double high = has_range ? point.high : point.v;
+            double low = has_range ? point.low : point.v;
+            auto local = util::to_local (point.t, zone);
+            long long key = floor<minutes> (local.time_since_epoch ()).count ()
+                            / size.count ();
+            if (result.empty () || key != current_key)
+                {
+                    current_key = key;
+                    local_seconds start{minutes{key * size.count ()}};
+                    result.push_back ({zone->to_sys (start, choose::earliest),
+                                       open, high, low, point.v
+                                      });
+                }
+            else
+                {
+                    Candle &candle = result.back ();
+                    candle.high = std::max (candle.high, high);
+                    candle.low = std::min (candle.low, low);
+                    candle.close = point.v;
+                }
+        }
+    return result;
+}
+
+minutes
+candle_size (days length, int max_candles)
+{
+    static constexpr int sizes[] = {60, 120, 240, 360, 480, 720, 1440, 2880, 4320,
+                                    10080
+                                   };
+    for (int size : sizes)
+        if (duration_cast<minutes> (length).count () / size <= max_candles)
+            return minutes{size};
+    return minutes{sizes[std::size (sizes) - 1]};
+}
+
+std::string
+format_hours (hours span)
+{
+    if (span.count () % 24 == 0)
+        return std::format ("{}d", span.count () / 24);
+    return std::format ("{}h", span.count ());
 }
 
 std::vector<Chart>
@@ -677,9 +797,10 @@ protected:
                 }))
                 return std::nullopt;
                 Result r;
-                r.points = last_span (parse (p, wrap.at ("body")
-                                             .get_ref<const std::string &> ()),
-                                      charts_[i].range.length);
+                r.history = last_span (parse (p, wrap.at ("body")
+                                              .get_ref<const std::string &> ()),
+                                       charts_[i].range.history);
+                r.points = last_span (r.history, charts_[i].range.length);
                 if (r.points.size () < 2)
                     return std::nullopt;
                 r.provider = p.label ();
@@ -711,13 +832,294 @@ private:
     std::vector<Chart> charts_;
 };
 
+struct PlotOptions
+{
+    bool candles = true;
+    bool averages = true;
+};
+
+tui::Role
+plot_role (const Chart &chart, std::size_t instrument_index)
+{
+    static constexpr tui::Role series[] =
+    {
+        tui::SERIES1, tui::SERIES2, tui::SERIES3, tui::SERIES4
+    };
+    for (const auto &[name, role] : plot_colors)
+        if (name == chart.color)
+            return role;
+    return series[instrument_index % 4];
+}
+
+std::string
+signed_percent (double value, int decimals = 1)
+{
+    return std::format ("{}{:.{}f}%", value < 0 ? "−" : "+", std::abs (value), decimals);
+}
+
+void
+wrap_error (const tui::Rect &in, const std::string &error)
+{
+    int y = in.y;
+    for (std::string_view part : util::split (error, ';'))
+        {
+            std::string line (util::trim (part));
+            while (!line.empty () && y < in.bottom ())
+                {
+                    std::string shown = tui::fit (line, in.w - 2);
+                    tui::put (y++, in.x + 1, shown, tui::attr (tui::BAD));
+                    if (shown == line)
+                        break;
+                    std::size_t cut = shown.size () - std::string ("…").size ();
+                    line = "  " + line.substr (cut);
+                }
+        }
+}
+
+struct PlotArea
+{
+    int top = 0;
+    int left = 0;
+    int width = 0;
+    int height = 0;
+    Axis axis;
+    util::TimePoint start{};
+    util::TimePoint end{};
+
+    int
+    dot_y (double value) const
+    {
+        double fraction = (axis.hi - value) / (axis.hi - axis.lo);
+        return static_cast<int> (std::lround (fraction * (height * 4 - 1)));
+    }
+
+    double
+    half_rows (double value) const
+    {
+        double fraction = (axis.hi - value) / (axis.hi - axis.lo);
+        return fraction * (height * 2 - 1);
+    }
+
+    int
+    dot_x (util::TimePoint when) const
+    {
+        double fraction = duration<double> (when - start) / duration<double> (end - start);
+        return static_cast<int> (std::lround (std::clamp (fraction, 0.0, 1.0)
+                                              * (width * 2 - 1)));
+    }
+};
+
+std::optional<PlotArea>
+prepare_plot (const tui::Rect &in, int top, double low, double high,
+              util::TimePoint start, util::TimePoint end,
+              const std::function<std::string (double, int)> &label_of)
+{
+    PlotArea plot;
+    plot.top = top;
+    plot.height = in.bottom () - top - 1;
+    if (plot.height < 2)
+        return std::nullopt;
+    plot.axis = nice_axis (low, high, std::clamp (plot.height / 2 + 1, 2, 6));
+    int label_decimals = std::max (plot.axis.decimals, 0);
+    int label_width = 0;
+    for (double tick : plot.axis.ticks)
+        label_width = std::max (label_width, tui::width (label_of (tick, label_decimals)));
+    plot.left = in.x + label_width + 2;
+    plot.width = in.right () - plot.left;
+    if (plot.width < 4)
+        return std::nullopt;
+    plot.start = start;
+    plot.end = end;
+
+    attr_t frame_attr = tui::attr (tui::FRAME);
+    for (int row = 0; row < plot.height; ++row)
+        tui::put (top + row, plot.left - 1, "│", frame_attr);
+    for (double tick : plot.axis.ticks)
+        {
+            int row = plot.dot_y (tick) / 4;
+            if (row < 0 || row >= plot.height)
+                continue;
+            tui::put (top + row, in.x, tui::pad (label_of (tick, label_decimals),
+                                                 label_width, 'r'), tui::attr (tui::DIM));
+            tui::put (top + row, plot.left - 1, "┤", frame_attr);
+            for (int column = 0; column < plot.width; column += 2)
+                tui::put (top + row, plot.left + column, "·", frame_attr);
+        }
+    return plot;
+}
+
+void
+draw_time_axis (const PlotArea &plot, int right, Span span, const time_zone *zone)
+{
+    int axis_row = plot.top + plot.height;
+    tui::put (axis_row, plot.left - 1, "└", tui::attr (tui::FRAME));
+    auto first_day = floor<days> (util::to_local (plot.start, zone)) + days{1};
+    int next_free = plot.left;
+    for (auto midnight = first_day; zone->to_sys (midnight) <= plot.end;
+            midnight += days{1})
+        {
+            year_month_day date{midnight};
+            weekday day_of_week{midnight};
+            std::string label;
+            if (span == Span::week)
+                label = std::format ("{:%a %d}", midnight);
+            else if (span == Span::month)
+                {
+                    if (day_of_week != Monday)
+                        continue;
+                    label = std::format ("{:%d %b}", midnight);
+                }
+            else
+                {
+                    if (date.day () != day{1})
+                        continue;
+                    label = std::format ("{:%b}", midnight);
+                }
+            int column = plot.left + plot.dot_x (zone->to_sys (midnight)) / 2;
+            label = "╵" + label;
+            int label_width = tui::width (label);
+            if (column < next_free || column + label_width > right)
+                continue;
+            tui::put (axis_row, column, label, tui::attr (tui::DIM));
+            next_free = column + label_width + 2;
+        }
+}
+
+void
+trace_line (tui::Braille &canvas, const PlotArea &plot, const std::vector<Point> &points,
+            const std::function<double (const Point &)> &value_of)
+{
+    if (points.empty ())
+        return;
+    std::vector<util::TimePoint::duration> gaps;
+    for (std::size_t index = 1; index < points.size (); ++index)
+        gaps.push_back (points[index].t - points[index - 1].t);
+    util::TimePoint::duration max_gap = hours{24 * 365};
+    if (!gaps.empty ())
+        {
+            std::ranges::nth_element (gaps, gaps.begin () + gaps.size () / 2);
+            max_gap = 4 * gaps[gaps.size () / 2];
+        }
+    for (std::size_t index = 0; index < points.size (); ++index)
+        {
+            if (points[index].t < plot.start)
+                continue;
+            int column = plot.dot_x (points[index].t);
+            int row = plot.dot_y (value_of (points[index]));
+            if (index > 0 && points[index - 1].t >= plot.start
+                    && points[index].t - points[index - 1].t <= max_gap)
+                canvas.line (plot.dot_x (points[index - 1].t),
+                             plot.dot_y (value_of (points[index - 1])), column, row);
+            else
+                canvas.set (column, row);
+        }
+}
+
+void
+draw_candles (const PlotArea &plot, const std::vector<Candle> &candles,
+              minutes size)
+{
+    for (const Candle &candle : candles)
+        {
+            util::TimePoint middle = candle.start + size / 2;
+            if (middle < plot.start)
+                middle = plot.start;
+            int column = plot.left + plot.dot_x (middle) / 2;
+            bool rising = candle.close >= candle.open;
+            attr_t candle_attr = tui::attr (rising ? tui::GOOD : tui::BAD);
+            double body_top = plot.half_rows (std::max (candle.open, candle.close));
+            double body_bottom = plot.half_rows (std::min (candle.open, candle.close));
+            double wick_top = plot.half_rows (candle.high);
+            double wick_bottom = plot.half_rows (candle.low);
+            for (int row = 0; row < plot.height; ++row)
+                {
+                    auto in_range = [] (int half, double from, double to)
+                    {
+                        return half >= std::floor (from + 0.5) && half <= std::floor (to + 0.5);
+                    };
+                    int upper = row * 2;
+                    int lower = row * 2 + 1;
+                    bool upper_body = in_range (upper, body_top, body_bottom);
+                    bool lower_body = in_range (lower, body_top, body_bottom);
+                    bool upper_wick = in_range (upper, wick_top, wick_bottom);
+                    bool lower_wick = in_range (lower, wick_top, wick_bottom);
+                    const char *glyph = nullptr;
+                    if (upper_body && lower_body)
+                        glyph = "█";
+                    else if (upper_body)
+                        glyph = lower_wick ? "█" : "▀";
+                    else if (lower_body)
+                        glyph = upper_wick ? "█" : "▄";
+                    else if (upper_wick && lower_wick)
+                        glyph = "│";
+                    else if (upper_wick)
+                        glyph = "╵";
+                    else if (lower_wick)
+                        glyph = "╷";
+                    if (glyph)
+                        tui::put (plot.top + row, column, glyph, candle_attr);
+                }
+        }
+}
+
+std::vector<std::pair<std::string, std::optional<double>>>
+instrument_changes (const std::string &name, const std::vector<Chart> &charts,
+                    const std::vector<ChartState> &states)
+{
+    std::vector<std::size_t> owners;
+    for (std::size_t index = 0; index < charts.size (); ++index)
+        if (charts[index].name == name && states[index].result)
+            owners.push_back (index);
+    std::ranges::sort (owners, {}, [&charts] (std::size_t index)
+    {
+        return charts[index].range.length;
+    });
+    static const std::pair<const char *, hours> periods[] =
+    {
+        {"24h", hours{24}}, {"7d", hours{7 * 24}}, {"30d", hours{30 * 24}},
+        {"6m", hours{182 * 24}},
+    };
+    std::vector<std::pair<std::string, std::optional<double>>> changes;
+    for (const auto &[label, period] : periods)
+        {
+            std::optional<double> change;
+            for (std::size_t index : owners)
+                {
+                    change = change_over (states[index].result->history, period,
+                                          charts[index].range.bucket);
+                    if (change)
+                        break;
+                }
+            changes.emplace_back (label, change);
+        }
+    return changes;
+}
+
+void
+put_items (int row, int left, int right,
+           const std::vector<std::pair<std::string, tui::Role>> &items)
+{
+    int column = left;
+    for (const auto &[text, role] : items)
+        {
+            int item_width = tui::width (text);
+            int separator = column > left ? 3 : 0;
+            if (column + separator + item_width > right)
+                break;
+            if (separator)
+                column += tui::put (row, column, " · ", tui::attr (tui::FRAME));
+            column += tui::put (row, column, text, tui::attr (role));
+        }
+}
+
 class MarketsScreen : public Screen
 {
 public:
     MarketsScreen (MarketsSource &src, const time_zone *tz, seconds interval,
-                   std::string title, std::vector<std::size_t> chart_indices)
+                   std::string title, std::vector<std::size_t> chart_indices,
+                   PlotOptions options)
         : src_ (src), tz_ (tz), interval_ (interval), title_ (std::move (title)),
-          chart_indices_ (std::move (chart_indices))
+          chart_indices_ (std::move (chart_indices)), options_ (options)
     {
     }
 
@@ -742,15 +1144,12 @@ public:
 
         std::vector<std::string> range_ids;
         std::vector<std::string> instruments;
+        for (const Chart &chart : charts)
+            if (std::ranges::find (instruments, chart.name) == instruments.end ())
+                instruments.push_back (chart.name);
         for (std::size_t index : chart_indices_)
-            {
-                if (std::ranges::find (range_ids, charts[index].range.id)
-                        == range_ids.end ())
-                    range_ids.push_back (charts[index].range.id);
-                if (std::ranges::find (instruments, charts[index].name)
-                        == instruments.end ())
-                    instruments.push_back (charts[index].name);
-            }
+            if (std::ranges::find (range_ids, charts[index].range.id) == range_ids.end ())
+                range_ids.push_back (charts[index].range.id);
         int column_count = static_cast<int> (range_ids.size ());
         if (column_count < 2)
             column_count = area.w >= 90 && count > 1 ? 2 : 1;
@@ -758,10 +1157,6 @@ public:
             column_count = 1;
         int row_count = static_cast<int> ((count + column_count - 1) / column_count);
         std::vector<tui::Rect> rows = area.rows (row_count, 0);
-        static constexpr tui::Role series[] =
-        {
-            tui::SERIES1, tui::SERIES2, tui::SERIES3, tui::SERIES4
-        };
         for (std::size_t position = 0; position < count; ++position)
             {
                 const Chart &chart = charts[chart_indices_[position]];
@@ -769,18 +1164,17 @@ public:
                                              std::ranges::find (instruments, chart.name) - instruments.begin ());
                 std::vector<tui::Rect> cells
                     = rows[position / column_count].columns (column_count, 0);
-                tui::Role color = series[instrument % 4];
-                for (const auto &[name, role] : plot_colors)
-                    if (name == chart.color)
-                        color = role;
                 draw_chart (cells[position % column_count], chart,
-                            (*states)[chart_indices_[position]], color, now);
+                            (*states)[chart_indices_[position]],
+                            instrument_changes (chart.name, charts, *states),
+                            plot_role (chart, instrument), now);
             }
     }
 
 private:
     void
     draw_chart (const tui::Rect &cell, const Chart &chart, const ChartState &cs,
+                const std::vector<std::pair<std::string, std::optional<double>>> &changes,
                 tui::Role color, util::TimePoint now)
     {
         std::string title = chart.name;
@@ -809,25 +1203,24 @@ private:
                 return;
             }
 
-        const std::vector<Point> &pts = cs.result->points;
-        double first = pts.front ().v, last = pts.back ().v;
-        auto [mn, mx] = std::ranges::minmax (pts | std::views::transform (&Point::v));
-        int dec = chart.decimals >= 0 ? chart.decimals : auto_decimals (last);
+        const std::vector<Point> &points = cs.result->points;
+        const std::vector<Point> &history = cs.result->history;
+        Statistics stats = statistics (points);
+        int decimals = chart.decimals >= 0 ? chart.decimals : auto_decimals (stats.last);
 
-        double change = last - first;
-        double pct = first != 0 ? change / first * 100 : 0;
-        bool up = change >= 0;
-        int x = in.x + 1;
-        x += tui::put (in.y, x, format_price (last, dec),
-                       tui::attr (tui::NORMAL) | A_BOLD) + 2;
-        std::string arrow = up ? tui::icon ("\U000F0535", "▲")
+        double change = stats.last - stats.open;
+        bool rising = change >= 0;
+        int column = in.x + 1;
+        column += tui::put (in.y, column, format_price (stats.last, decimals),
+                            tui::attr (tui::NORMAL) | A_BOLD) + 2;
+        std::string arrow = rising ? tui::icon ("\U000F0535", "▲")
                             : tui::icon ("\U000F0533", "▼");
-        x += tui::put (in.y, x, std::format ("{} {}{} ({}{:.2f}%)", arrow,
-                                             up ? "+" : "−", format_price (std::abs (change), dec),
-                                             up ? "+" : "−", std::abs (pct)),
-                       tui::attr (up ? tui::GOOD : tui::BAD));
-        std::string right = std::format ("H {}  L {}", format_price (mx, dec),
-                                         format_price (mn, dec));
+        column += tui::put (in.y, column, std::format ("{} {}{} ({})", arrow,
+                            rising ? "+" : "−", format_price (std::abs (change), decimals),
+                            signed_percent (stats.change_percent, 2)),
+                            tui::attr (rising ? tui::GOOD : tui::BAD));
+        std::string right = std::format ("H {}  L {}", format_price (stats.high, decimals),
+                                         format_price (stats.low, decimals));
         tui::Role right_role = tui::DIM;
         if (!cs.error.empty ())
             {
@@ -835,143 +1228,99 @@ private:
                                      util::format_age (cs.error_at, now));
                 right_role = tui::WARN;
             }
-        int rw = tui::width (right);
-        if (in.right () - rw - 1 > x + 2)
-            tui::put (in.y, in.right () - rw - 1, right, tui::attr (right_role));
+        int right_width = tui::width (right);
+        if (in.right () - right_width - 1 > column + 2)
+            tui::put (in.y, in.right () - right_width - 1, right, tui::attr (right_role));
 
-        Statistics stats = statistics (pts);
-        std::vector<std::string> details =
-        {
-            std::format ("open {}", format_price (stats.open, dec)),
-            std::format ("avg {}", format_price (stats.average, dec)),
-            std::format ("{}{:.1f}% from high", stats.from_high_percent < 0 ? "−" : "+",
-                         std::abs (stats.from_high_percent)),
-            std::format ("{}{:.1f}% from low", stats.from_low_percent < 0 ? "−" : "+",
-                         std::abs (stats.from_low_percent)),
-            std::format ("volatility {:.2f}%/day", stats.daily_volatility_percent),
-        };
-        int detail_x = in.x + 1;
-        for (const std::string &detail : details)
+        std::vector<std::pair<std::string, tui::Role>> change_items;
+        for (const auto &[label, value] : changes)
+            change_items.emplace_back (std::format ("{} {}", label,
+                                                    value ? signed_percent (*value, std::abs (*value) < 1 ? 2 : 1)
+                                                    : std::string ("—")),
+                                       !value ? tui::DIM : *value >= 0 ? tui::GOOD : tui::BAD);
+        put_items (in.y + 1, in.x + 1, in.right () - 1, change_items);
+
+        std::vector<Point> fast;
+        std::vector<Point> slow;
+        if (options_.averages)
             {
-                int detail_width = tui::width (detail);
-                if (detail_x + detail_width > in.right () - 1)
-                    break;
-                if (detail_x > in.x + 1)
-                    detail_x += tui::put (in.y + 1, detail_x, " · ",
-                                          tui::attr (tui::FRAME));
-                detail_x += tui::put (in.y + 1, detail_x, detail, tui::attr (tui::DIM));
+                fast = moving_average (history, chart.range.fast_average);
+                slow = moving_average (history, chart.range.slow_average);
             }
+        std::vector<std::pair<std::string, tui::Role>> details =
+        {
+            {std::format ("open {}", format_price (stats.open, decimals)), tui::DIM},
+            {std::format ("avg {}", format_price (stats.average, decimals)), tui::DIM},
+            {std::format ("{} from high", signed_percent (stats.from_high_percent)), tui::DIM},
+            {std::format ("{} from low", signed_percent (stats.from_low_percent)), tui::DIM},
+            {std::format ("vol {:.2f}%/d", stats.daily_volatility_percent), tui::DIM},
+        };
+        if (options_.averages)
+            {
+                details.emplace_back (std::format ("MA{} ━", format_hours (chart.range.fast_average)),
+                                      tui::PLOT_WHITE);
+                details.emplace_back (std::format ("MA{} ━", format_hours (chart.range.slow_average)),
+                                      tui::PLOT_MAGENTA);
+            }
+        put_items (in.y + 2, in.x + 1, in.right () - 1, details);
 
-        int plot_h = in.h - 3;
-        if (plot_h < 2)
+        double low = stats.low;
+        double high = stats.high;
+        minutes size{0};
+        std::vector<Candle> candles;
+        util::TimePoint end = points.back ().t;
+        util::TimePoint start = end - chart.range.length;
+        if (options_.candles)
+            {
+                int estimated_width = std::max (8, in.w - 10);
+                size = candle_size (chart.range.length, estimated_width / 2);
+                candles = make_candles (points, size, tz_);
+                for (const Candle &candle : candles)
+                    {
+                        low = std::min (low, candle.low);
+                        high = std::max (high, candle.high);
+                    }
+                end = candles.back ().start + size;
+                start = end - chart.range.length;
+            }
+        for (const std::vector<Point> *average :
+                {
+                    &fast, &slow
+                })
+            for (const Point &point : *average)
+                if (point.t >= start)
+                    {
+                        low = std::min (low, point.v);
+                        high = std::max (high, point.v);
+                    }
+
+        auto label_of = [] (double value, int label_decimals)
+        {
+            return format_price (value, label_decimals);
+        };
+        std::optional<PlotArea> plot = prepare_plot (in, in.y + 3, low, high, start, end,
+                                       label_of);
+        if (!plot)
             return;
-        Axis axis = nice_axis (mn, mx, std::clamp (plot_h / 2 + 1, 2, 6));
-        int label_dec = std::max (axis.decimals, 0);
-        int lw = 0;
-        for (double t : axis.ticks)
-            lw = std::max (lw, tui::width (format_price (t, label_dec)));
-        int plot_x = in.x + lw + 2;
-        int plot_w = in.right () - plot_x;
-        if (plot_w < 4)
-            return;
-        int top = in.y + 2;
-
-        tui::Braille canvas (plot_w, plot_h);
-        auto ydot = [&] (double v)
+        auto close_of = [] (const Point &point)
         {
-            double f = (axis.hi - v) / (axis.hi - axis.lo);
-            return static_cast<int> (std::lround (f * (canvas.dots_h () - 1)));
+            return point.v;
         };
-        util::TimePoint t1 = pts.back ().t;
-        util::TimePoint t0 = t1 - chart.range.length;
-        auto xdot = [&] (util::TimePoint t)
-        {
-            double f = duration<double> (t - t0) / duration<double> (t1 - t0);
-            return static_cast<int> (std::lround (std::clamp (f, 0.0, 1.0)
-                                                  * (canvas.dots_w () - 1)));
-        };
-
-        std::vector<util::TimePoint::duration> gaps;
-        for (std::size_t i = 1; i < pts.size (); ++i)
-            gaps.push_back (pts[i].t - pts[i - 1].t);
-        std::ranges::nth_element (gaps, gaps.begin () + gaps.size () / 2);
-        auto max_gap = 4 * gaps[gaps.size () / 2];
-        for (std::size_t i = 0; i < pts.size (); ++i)
+        tui::Braille slow_canvas (plot->width, plot->height);
+        tui::Braille fast_canvas (plot->width, plot->height);
+        trace_line (slow_canvas, *plot, slow, close_of);
+        trace_line (fast_canvas, *plot, fast, close_of);
+        slow_canvas.draw (plot->top, plot->left, tui::attr (tui::PLOT_MAGENTA));
+        fast_canvas.draw (plot->top, plot->left, tui::attr (tui::PLOT_WHITE));
+        if (options_.candles)
+            draw_candles (*plot, candles, size);
+        else
             {
-                int px = xdot (pts[i].t), py = ydot (pts[i].v);
-                if (i > 0 && pts[i].t - pts[i - 1].t <= max_gap)
-                    canvas.line (xdot (pts[i - 1].t), ydot (pts[i - 1].v), px, py);
-                else
-                    canvas.set (px, py);
+                tui::Braille price_canvas (plot->width, plot->height);
+                trace_line (price_canvas, *plot, points, close_of);
+                price_canvas.draw (plot->top, plot->left, tui::attr (color));
             }
-
-        attr_t fa = tui::attr (tui::FRAME);
-        for (int r = 0; r < plot_h; ++r)
-            tui::put (top + r, plot_x - 1, "│", fa);
-        for (double t : axis.ticks)
-            {
-                int r = ydot (t) / 4;
-                if (r < 0 || r >= plot_h)
-                    continue;
-                tui::put (top + r, in.x, tui::pad (format_price (t, label_dec), lw, 'r'),
-                          tui::attr (tui::DIM));
-                tui::put (top + r, plot_x - 1, "┤", fa);
-                for (int c = 0; c < plot_w; c += 2)
-                    if (!canvas.used (c, r))
-                        tui::put (top + r, plot_x + c, "·", tui::attr (tui::FRAME));
-            }
-        canvas.draw (top, plot_x, tui::attr (color));
-
-        int xl = top + plot_h;
-        tui::put (xl, plot_x - 1, "└", fa);
-        auto first_day = floor<days> (util::to_local (t0, tz_)) + days{1};
-        int next_free = plot_x;
-        for (auto midnight = first_day; tz_->to_sys (midnight) <= t1; midnight += days{1})
-            {
-                year_month_day date{midnight};
-                weekday day_of_week{midnight};
-                std::string label;
-                if (chart.range.span == Span::week)
-                    label = std::format ("{:%a %d}", midnight);
-                else if (chart.range.span == Span::month)
-                    {
-                        if (day_of_week != Monday)
-                            continue;
-                        label = std::format ("{:%d %b}", midnight);
-                    }
-                else
-                    {
-                        if (date.day () != day{1})
-                            continue;
-                        label = std::format ("{:%b}", midnight);
-                    }
-                int col = plot_x + xdot (tz_->to_sys (midnight)) / 2;
-                label = "╵" + label;
-                int lwid = tui::width (label);
-                if (col < next_free || col + lwid > in.right ())
-                    continue;
-                tui::put (xl, col, label, tui::attr (tui::DIM));
-                next_free = col + lwid + 2;
-            }
-    }
-
-    static void
-    wrap_error (const tui::Rect &in, const std::string &error)
-    {
-        int y = in.y;
-        for (std::string_view part : util::split (error, ';'))
-            {
-                std::string line (util::trim (part));
-                while (!line.empty () && y < in.bottom ())
-                    {
-                        std::string shown = tui::fit (line, in.w - 2);
-                        tui::put (y++, in.x + 1, shown, tui::attr (tui::BAD));
-                        if (shown == line)
-                            break;
-                        std::size_t cut = shown.size () - std::string ("…").size ();
-                        line = "  " + line.substr (cut);
-                    }
-            }
+        draw_time_axis (*plot, in.right (), chart.range.span, tz_);
     }
 
     MarketsSource &src_;
@@ -979,6 +1328,151 @@ private:
     seconds interval_;
     std::string title_;
     std::vector<std::size_t> chart_indices_;
+    PlotOptions options_;
+};
+
+class CompareScreen : public Screen
+{
+public:
+    CompareScreen (MarketsSource &src, const time_zone *tz)
+        : src_ (src), tz_ (tz)
+    {
+    }
+
+    std::string title () const override
+    {
+        return "Compare";
+    }
+
+    std::vector<Source *> sources () const override
+    {
+        return {&src_};
+    }
+
+    void
+    draw (const tui::Rect &area, util::TimePoint now) override
+    {
+        auto states = src_.state.get ();
+        const auto &charts = src_.charts ();
+        std::vector<std::string> instruments;
+        std::vector<Range> ranges;
+        for (const Chart &chart : charts)
+            {
+                if (std::ranges::find (instruments, chart.name) == instruments.end ())
+                    instruments.push_back (chart.name);
+                if (std::ranges::find (ranges, chart.range.id, &Range::id) == ranges.end ())
+                    ranges.push_back (chart.range);
+            }
+        if (ranges.empty ())
+            return;
+        int column_count = area.w >= 45 * static_cast<int> (ranges.size ())
+                           ? static_cast<int> (ranges.size ()) : 1;
+        int row_count = (static_cast<int> (ranges.size ()) + column_count - 1) / column_count;
+        std::vector<tui::Rect> rows = area.rows (row_count, 0);
+        for (std::size_t position = 0; position < ranges.size (); ++position)
+            {
+                std::vector<tui::Rect> cells
+                    = rows[position / column_count].columns (column_count, 0);
+                draw_panel (cells[position % column_count], ranges[position], charts,
+                            *states, instruments, now);
+            }
+    }
+
+private:
+    void
+    draw_panel (const tui::Rect &cell, const Range &range, const std::vector<Chart> &charts,
+                const std::vector<ChartState> &states,
+                const std::vector<std::string> &instruments, util::TimePoint now)
+    {
+        tui::Rect in = tui::frame (cell, std::format ("{} Performance · {} · rebased to 0%",
+                                   tui::icon ("\U000F0128", "≋"), range.label));
+        if (in.empty ())
+            return;
+
+        struct Series
+        {
+            std::vector<Point> points;
+            tui::Role role;
+            std::string name;
+        };
+        std::vector<Series> series;
+        util::TimePoint end{};
+        for (std::size_t index = 0; index < charts.size (); ++index)
+            {
+                const Chart &chart = charts[index];
+                if (chart.range.id != range.id || !states[index].result)
+                    continue;
+                const std::vector<Point> &points = states[index].result->points;
+                if (points.empty () || points.front ().v == 0)
+                    continue;
+                Series entry;
+                entry.name = chart.name;
+                std::size_t instrument = static_cast<std::size_t> (
+                                             std::ranges::find (instruments, chart.name) - instruments.begin ());
+                entry.role = plot_role (chart, instrument);
+                for (const Point &point : points)
+                    {
+                        double percent = (point.v / points.front ().v - 1) * 100;
+                        entry.points.push_back ({point.t, percent, percent, percent, percent});
+                    }
+                end = std::max (end, points.back ().t);
+                series.push_back (std::move (entry));
+            }
+        if (series.empty ())
+            {
+                tui::put (in.y, in.x + 1, "Loading…", tui::attr (tui::DIM));
+                return;
+            }
+        std::ranges::sort (series, std::greater<> (), [] (const Series &entry)
+        {
+            return entry.points.back ().v;
+        });
+
+        std::vector<std::pair<std::string, tui::Role>> legend;
+        double low = 0;
+        double high = 0;
+        for (const Series &entry : series)
+            {
+                legend.emplace_back (std::format ("━ {} {}", entry.name,
+                                                  signed_percent (entry.points.back ().v)), entry.role);
+                for (const Point &point : entry.points)
+                    {
+                        low = std::min (low, point.v);
+                        high = std::max (high, point.v);
+                    }
+            }
+        put_items (in.y, in.x + 1, in.right () - 1, legend);
+        (void) now;
+
+        auto label_of = [] (double value, int label_decimals)
+        {
+            return std::format ("{}{:.{}f}%", value > 0 ? "+" : value < 0 ? "−" : "",
+                                std::abs (value), label_decimals);
+        };
+        std::optional<PlotArea> plot = prepare_plot (in, in.y + 1, low, high,
+                                       end - range.length, end, label_of);
+        if (!plot)
+            return;
+        auto value_of = [] (const Point &point)
+        {
+            return point.v;
+        };
+        int zero_row = plot->dot_y (0) / 4;
+        if (zero_row >= 0 && zero_row < plot->height)
+            for (int column = 0; column < plot->width; ++column)
+                tui::put (plot->top + zero_row, plot->left + column, "─",
+                          tui::attr (tui::FRAME));
+        for (auto entry = series.rbegin (); entry != series.rend (); ++entry)
+            {
+                tui::Braille canvas (plot->width, plot->height);
+                trace_line (canvas, *plot, entry->points, value_of);
+                canvas.draw (plot->top, plot->left, tui::attr (entry->role));
+            }
+        draw_time_axis (*plot, in.right (), range.span, tz_);
+    }
+
+    MarketsSource &src_;
+    const time_zone *tz_;
 };
 
 std::vector<Chart>
@@ -1071,7 +1565,16 @@ install_markets (App &app)
         }
     auto &src = app.add_source (std::make_unique<MarketsSource> (
                                     std::move (charts), interval));
+    PlotOptions options;
+    std::string style = t["style"].value_or<std::string> ("candles");
+    if (style != "candles" && style != "line")
+        throw std::runtime_error (std::format (
+                                      "[markets] style: unknown style '{}' (candles or line)", style));
+    options.candles = style == "candles";
+    options.averages = t["moving_averages"].value_or (true);
     for (std::size_t screen = 0; screen < titles.size (); ++screen)
         app.add_screen (std::make_unique<MarketsScreen> (src, tz, interval,
-                        titles[screen], members[screen]));
+                        titles[screen], members[screen], options));
+    if (t["compare"].value_or (true))
+        app.add_screen (std::make_unique<CompareScreen> (src, tz));
 }

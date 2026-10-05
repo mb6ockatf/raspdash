@@ -15,16 +15,59 @@ TON/USDT, and @samp{BTC · RUB} shows BTC/USD and USD/RUB, one
 instrument per row.  When the terminal is too narrow for the ranges to
 sit side by side, the charts are stacked in one column.
 
-Each chart's first line shows the last price and the change over the
-range in absolute terms and in percent (green when up, red when down),
-with the range's high and low on the right.  The second line adds the
-first price of the range (@samp{open}), the average, how far the last
-price is from the high and from the low, and the daily volatility: the
-standard deviation of the returns between consecutive points, scaled
-to one day.  Items that do not fit are left out.  Below them is a
-Braille line plot with a labelled price axis; the time axis is labelled
-with days for a week, Mondays for a month and month names for half a
-year.
+Each chart has three lines of figures above the plot:
+
+@enumerate
+@item
+The last price and the change over the range in absolute terms and in
+percent (green when up, red when down), with the range's high and low
+on the right.
+@item
+The instrument's change over the last 24 hours, 7 days, 30 days and 6
+months, each taken from the finest data that reaches back that far (the
+month chart for the short periods, the half-year chart for the long
+ones); a dash means no chart covers the period.  Changes under 1% get
+two decimals.
+@item
+The first price of the range (@samp{open}), the average, how far the
+last price is from the high and from the low, the daily volatility (the
+standard deviation of the returns between consecutive points, scaled to
+one day) and the legend of the moving averages.
+@end enumerate
+
+Items that do not fit are left out.  Below them is the plot, with a
+labelled price axis; the time axis is labelled with days for a week,
+Mondays for a month and month names for half a year.
+
+@cindex candlesticks
+With @code{style = "candles"} (the default) the plot is a candlestick
+chart: each candle covers a fixed span of local time, chosen as the
+shortest of 1, 2, 4, 6, 8 or 12 hours or 1, 2, 3 or 7 days that keeps
+the candles at least two columns apart (a day on a month chart and three
+days on a half-year chart at the kiosk's width).  A candle is green when
+it closed at or above its open and red otherwise; the body is drawn with
+half blocks, so it has twice the vertical resolution of a text row, and
+the thin line is the range between the high and the low.  Candles use
+the providers' own open, high and low where they send them; CoinGecko
+and the CBR send only one price per point, so their candles are built
+from those prices.  With @code{style = "line"} the plot is a Braille
+line through the closing prices, in the instrument's colour.
+
+@cindex moving averages
+Two moving averages are drawn behind the price: a fast one in white and
+a slow one in magenta, over 1 and 3 days on week charts, 5 and 10 days
+on month charts and 20 and 50 days on half-year charts.  Each point of
+an average is the mean of the prices in the window of time before it.
+raspdash fetches more history than it shows (10, 40 and 240 days), so
+the averages run across the whole plot from the left edge.
+
+@cindex comparison chart
+The @samp{Compare} screen, added after the market screens, draws every
+instrument in one chart per range, rebased so that each starts at 0%:
+the lines show how each instrument performed against the others over the
+same month or half year.  The legend above lists them from best to
+worst with their change, in the instruments' colours, and a line marks
+0%.
 
 The frame title gives the range, how long ago the chart was fetched and
 the provider that served it, for example @samp{BTC/USD · 1 month · 3h
@@ -148,6 +191,12 @@ Time zone whose midnights label the time axis.  Default
 The ranges every instrument is drawn over, in column order:
 @samp{week}, @samp{month} and @samp{half-year}.  Default
 @samp{["month", "half-year"]}.
+@item style
+@samp{candles} (default) or @samp{line}.
+@item moving_averages
+Whether to draw the two moving averages.  Default @code{true}.
+@item compare
+Whether to add the @samp{Compare} screen.  Default @code{true}.
 @item charts
 An array of tables, one per instrument, in screen order.  When it is
 absent the four default instruments are used; when it is present, only
@@ -229,8 +278,10 @@ is ASCII; its values use a decimal comma and are divided by
 @code{expand_ranges} turns the configured instruments into charts, one
 per instrument and range, grouped by screen; @code{install_markets}
 then adds one source for all of them and one screen per screen title.
-A @code{Range} has an id, a label, a length (7, 30 or 182 days) and the
-spacing of its points.
+A @code{Range} has an id, a label, a length (7, 30 or 182 days), the
+spacing of its points, the history fetched for it (10, 40 or 240 days)
+and the windows of its two moving averages.  Every provider is asked for
+240 candles, which covers the history at each range's candle size.
 
 @code{provider_url} builds each request for the chart's range before
 the current time, choosing the candle size and count per provider.  The
@@ -243,8 +294,12 @@ transport errors start with, so the final error stays readable.
 @code{last_span} keeps the points within the range's length of the
 newest one: the window follows the data rather than the clock, so a
 chart restored from a twelve-hour-old cache still shows the whole
-range.  @code{statistics} computes the numbers of the chart's first two
-lines.
+range.  A @code{Result} keeps both the visible @code{points} and the
+whole @code{history}.  @code{statistics} computes the figures of the
+first and third lines, @code{change_over} those of the second,
+@code{moving_average} the averages and @code{make_candles} groups points
+into candles by local time; all of them are tested in
+@file{tests/test_markets.cpp}.
 
 The source fetches all charts concurrently, one thread per chart, and
 stores per chart either a new result or the error next to the previous

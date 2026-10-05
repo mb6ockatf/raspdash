@@ -38,3 +38,6 @@ Makefile.in
 /doc/raspdash.info
 /doc/stamp-vti
 /doc/version.texi
+
+# Claude Code worktrees and local settings
+/.claude/
