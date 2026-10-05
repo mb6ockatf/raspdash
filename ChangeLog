@@ -1,5 +1,22 @@
 2026-10-05  mb6ockatf
 
+	* src/xmr.cpp, src/xmr.hpp: New XMR screen: Monero market data from
+	CoinGecko, a 30-day price chart from Kraken (CoinGecko as fallback),
+	network state and recent blocks from xmrchain.net, P2Pool main, mini
+	and nano from p2pool.observer, a mining calculator, and the state of
+	your own monerod over JSON-RPC.  Each group is a source of its own.
+	* tests/test_xmr.cpp, tests/data/xmr-blocks.json,
+	tests/data/xmr-coingecko.json, tests/data/xmr-getinfo-restricted.json,
+	tests/data/xmr-networkinfo.json, tests/data/xmr-p2pool-main.json,
+	tests/data/xmr-p2pool-mini.json: New.
+	* src/modules.hpp: Register it.
+	* doc/xmr.texi: New chapter.
+	* doc/raspdash.texi: Include it; add it to the menu, the overview and
+	the table of intervals.
+	* Makefile.am, config.example.toml, README: Build and document it.
+
+2026-10-05  mb6ockatf
+
 	* src/tui.cpp, src/tui.hpp (PLOT_YELLOW, ...): New plot colours.
 	* src/markets.cpp, src/markets.hpp (Chart::color, known_color):
 	A fixed colour per instrument: XAUT yellow, TON blue, the dollar
