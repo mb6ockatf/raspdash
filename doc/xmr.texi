@@ -8,11 +8,11 @@
 @cindex XMR
 @cindex Monero
 @cindex mining calculator
-@cindex P2Pool
 @cindex monerod
 
 The @dfn{XMR} screen gathers what there is to know about Monero on one
-page.  It has seven framed panels in three bands:
+page.  It has five framed panels in two bands: market and chart on
+top; network, mining calculator and node below.
 
 @table @strong
 @item Market
@@ -26,32 +26,18 @@ it.  The data comes from CoinGecko; @samp{priced} is the age of
 CoinGecko's own quote.
 
 @item XMR/USD
-A Braille line chart of the last 30 days in orange, from four-hourly
-Kraken candles (CoinGecko's hourly prices if Kraken fails), with a price
+A Braille line chart of the last 30 days in orange, from CoinGecko's
+hourly prices, with a price
 axis, a tick under every Monday, and the change, high, low, average and
 daily volatility over the period.
 
 @item Network
 The block height, difficulty and network hash rate (difficulty divided
-by the 120-second block target), the average time between the last 12
-blocks (yellow above three minutes), the age of the newest block (yellow
-after ten minutes), average fees per block and per transaction, the
-current block reward, the transaction pool, the total number of
-transactions, the hard-fork version and the median block size.  It comes
-from the block explorer at @uref{https://xmrchain.net}.
-
-@item Recent blocks
-The last 12 blocks, as many as fit: height, age, number of
-transactions (the coinbase not counted), size and the fees they paid.
-
-@item P2Pool
-One column per P2Pool sidechain (main, mini and nano by default): the
-pool's hash rate (sidechain difficulty divided by its block time) and
-its share of the network, the miners in the current PPLNS window and
-all miners ever seen, the share difficulty, when and at which height
-the pool last found a Monero block, the current and average effort
-(yellow above 300%), the number of blocks found and the P2Pool version.
-The data comes from @uref{https://p2pool.observer}.
+by the 120-second block target), the block target, the tail-emission
+reward of 0.6 XMR, the transaction pool, the total number of
+transactions, the hard-fork version, the median block size and the
+explorer's own peer connections.  It all comes from one small request
+to the block explorer at @uref{https://xmrchain.net}.
 
 @item Mining
 What a miner of @code{hashrate_hs} would earn: its share of the network
@@ -59,12 +45,11 @@ hash rate, the expected XMR per day and per month (also in dollars and
 in @code{currency}), the energy a @code{watts} rig uses per day and what
 it costs at @code{price_per_kwh}, the profit per day after electricity
 (red when negative), the XMR price at which mining breaks even, how
-often it would find a block alone on average, and how many P2Pool
-shares it would find per day on each sidechain (yellow below one a day,
-since then payouts are rare).  The earnings are expected values:
-@var{share} * 720 * @var{reward}, where 720 is the number of blocks
-in a day and the reward is the latest block's (0.6 XMR of tail emission
-plus fees).
+often it would find a block alone on average.  The earnings are
+expected values: @var{share} * 720 * @var{reward}, where 720 is the
+number of blocks in a day and the reward is the 0.6 XMR of tail
+emission; transaction fees, a few thousandths of an XMR a block, are
+left out.
 
 @item Node
 Your own @command{monerod}, if @code{node} is set: whether it is
@@ -87,9 +72,33 @@ and its bottom line gives the error; a panel that never had data shows
 the error in red instead.  The groups are fetched independently, so one
 service being down blanks nothing else.
 
-On a 120-column terminal the blocks table drops its size and fee
-columns when they do not fit, and every panel shows as many rows as
-there is room for.
+On a 190 by 54 terminal the chart takes most of the height; on a 120
+by 40 one the three lower panels share the width equally, long lines are
+cut with an ellipsis and every panel shows as many rows as there is
+room for.
+
+@section Sources left out
+
+raspdash runs on a Raspberry Pi whose connection passes deep packet
+inspection that freezes connections to some foreign hosts after about
+16 kB.  Measured from the Pi, CoinGecko's coin and 30-day chart
+requests and xmrchain.net's @samp{/api/networkinfo} (under 1 kB) get
+through; these did not, so the screen no longer uses them:
+
+@itemize
+@item
+Kraken's OHLC candles, formerly the chart's first choice; the chart now
+uses CoinGecko alone.
+@item
+xmrchain.net's @samp{/api/transactions} (about 150 kB), which fed a
+Recent blocks panel and the average block time, the age of the last
+block and the fees per block and per transaction in the Network panel.
+@item
+@samp{pool_info} from @uref{https://p2pool.observer} and its mini and
+nano subdomains, which fed a P2Pool panel, the P2Pool shares per day
+in the mining calculator and the current block reward (now taken as the
+tail emission of 0.6 XMR).
+@end itemize
 
 @section Running a node for the panel
 
@@ -119,13 +128,11 @@ price_per_kwh = 6.5
 currency = "rub"
 # node = "http://192.168.1.10:18081"
 node_direct = true
-pools = ["main", "mini", "nano"]
 timezone = "Europe/Moscow"
 # explorer = "https://xmrchain.net"
 market_interval = 600
 chart_interval = 1800
 network_interval = 120
-pools_interval = 300
 node_interval = 30
 @end example
 
@@ -151,9 +158,6 @@ Talk to the node directly, bypassing any proxy in @env{http_proxy}
 and friends; a proxy on the way to a LAN address usually fails.  Set it
 to @code{false} for a remote node that must go through the proxy.
 Default @code{true}.
-@item pools
-The P2Pool sidechains to show, in order: any of @samp{main},
-@samp{mini} and @samp{nano}.  Default all three.
 @item timezone
 The zone whose Mondays mark the chart's time axis.  Default
 @samp{Europe/Moscow}.
@@ -165,27 +169,23 @@ Seconds between CoinGecko market fetches.  Default 600.
 @item chart_interval
 Seconds between price-chart fetches.  Default 1800.
 @item network_interval
-Seconds between explorer fetches (network and recent blocks).  Default
-120.
-@item pools_interval
-Seconds between P2Pool fetches.  Default 300.
+Seconds between explorer fetches.  Default 120.
 @item node_interval
 Seconds between @samp{get_info} calls to the node.  Default 30.
 @end table
 
 No interval can be set below 10 seconds.  The public services allow far
-more requests than these defaults make: about 15 requests every 10
+more requests than these defaults make: about 11 requests every 10
 minutes in all, plus the node's.
 
 @section Internals
 
-@file{src/xmr.cpp} holds five sources, @samp{xmr-market},
-@samp{xmr-chart}, @samp{xmr-network}, @samp{xmr-pools} and
+@file{src/xmr.cpp} holds four sources, @samp{xmr-market},
+@samp{xmr-chart}, @samp{xmr-network} and
 @samp{xmr-node} (only with @code{node}), and the screen, which draws the
 bands with @code{tui::Rect} and one function per panel.  The parsers
 and the arithmetic (@code{parse_market}, @code{parse_network_info},
-@code{parse_blocks}, @code{parse_pool}, @code{parse_node_info},
-@code{sync_fraction}, @code{estimate}, @code{pool_shares_per_day} and
+@code{parse_node_info}, @code{sync_fraction}, @code{estimate} and
 the formatters) are pure functions declared in @file{src/xmr.hpp} and
 tested by @file{tests/test_xmr.cpp} against responses saved in
 @file{tests/data/xmr-*.json}.
@@ -197,23 +197,12 @@ community and developer data turned off; @code{market_data} holds the
 prices per currency.  A rate-limit answer (@samp{status.error_message})
 becomes the panel's error.
 @item Chart
-@uref{https://api.kraken.com/0/public/OHLC?pair=XMRUSD&interval=240},
-or @samp{coins/monero/market_chart?vs_currency=usd&days=30} from
-CoinGecko.  They are parsed by the Markets screen's parsers
-(@pxref{Markets}) and cut to the last 30 days.
+@samp{coins/monero/market_chart?vs_currency=usd&days=30} from
+CoinGecko, parsed by the Markets screen's parser (@pxref{Markets}) and
+cut to the last 30 days.
 @item Network
-@samp{/api/networkinfo} and @samp{/api/transactions?limit=12} (with a 60-second timeout, since
-the answer is about 150 kB) of the
-explorer.  @samp{difficulty} arrives as a string.  The transaction list
-leaves out each block's coinbase, so the per-block reward is not in it;
-the reward shown is P2Pool's @samp{mainchain.reward}, or 0.6 XMR plus
-the newest block's fees when no pool answered.
-@item P2Pool
-@samp{/api/pool_info} on @samp{p2pool.observer}, @samp{mini.} and
-@samp{nano.p2pool.observer}.  The site turns away clients whose
-User-Agent looks like a script (curl's, for example) with a challenge
-page; raspdash's own User-Agent passes, so keep @code{[app] user_agent}
-a real product string (@pxref{Application settings}).
+@samp{/api/networkinfo} of the explorer.  @samp{difficulty} arrives
+as a string.
 @item Node
 A JSON-RPC @samp{get_info} POST to @samp{@var{node}/json_rpc}.  A
 restricted RPC reports @samp{free_space} as the largest 64-bit number
@@ -223,7 +212,5 @@ polls.
 @end table
 
 Every response is saved in the cache directory (@file{xmr-market-coingecko.json},
-@file{xmr-chart-chart.json}, @file{xmr-network-networkinfo.json},
-@file{xmr-network-blocks.json}, @file{xmr-pools-pool-main.json},
-@dots{}, @file{xmr-node-get_info.json}) and parsed again at start, so a
+@file{xmr-chart-chart.json}, @file{xmr-network-networkinfo.json}, @file{xmr-node-get_info.json}) and parsed again at start, so a
 restart shows the last data at once.

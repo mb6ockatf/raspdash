@@ -1,4 +1,4 @@
-/* xmr.cpp -- the XMR screen: Monero market, network, pools and node.
+/* xmr.cpp -- the XMR screen: Monero market, network and node.
 
    Copyright (C) 2026 mb6ockatf
 
@@ -214,75 +214,6 @@ parse_network_info (std::string_view body)
     return info;
 }
 
-std::vector<Block>
-parse_blocks (std::string_view body)
-{
-    json document = json::parse (body);
-    if (string_at (document, "status") != "success")
-        throw std::runtime_error ("explorer: block list request failed");
-    std::vector<Block> blocks;
-    for (const json &entry : document.at ("data").at ("blocks"))
-        {
-            Block block;
-            block.height = unsigned_at (entry, "height");
-            block.timestamp = from_unix (unsigned_at (entry, "timestamp"));
-            block.size = unsigned_at (entry, "size");
-            for (const json &transaction : member (entry, "txs"))
-                {
-                    if (bool_at (transaction, "coinbase"))
-                        continue;
-                    ++block.transactions;
-                    block.fees += unsigned_at (transaction, "tx_fee");
-                }
-            blocks.push_back (block);
-        }
-    std::ranges::sort (blocks, std::ranges::greater{}, &Block::height);
-    return blocks;
-}
-
-std::optional<seconds>
-average_block_time (const std::vector<Block> &blocks)
-{
-    if (blocks.size () < 2)
-        return std::nullopt;
-    auto [oldest, newest] = std::ranges::minmax (blocks | std::views::transform (
-                                &Block::timestamp));
-    auto span = duration_cast<seconds> (newest - oldest);
-    return seconds{span.count () / static_cast<long long> (blocks.size () - 1)};
-}
-
-Pool
-parse_pool (std::string_view name, std::string_view body)
-{
-    json document = json::parse (body);
-    const json &sidechain = member (document, "sidechain");
-    if (!sidechain.is_object ())
-        throw std::runtime_error (std::format ("p2pool {}: no sidechain data", name));
-    Pool pool;
-    pool.name = name;
-    pool.difficulty = unsigned_at (sidechain, "difficulty");
-    pool.block_time = std::max (1, int_at (sidechain, "block_time"));
-    pool.hashrate = static_cast<double> (pool.difficulty) / pool.block_time;
-    pool.active_miners = int_at (member (sidechain, "window"), "miners");
-    pool.total_miners = int_at (sidechain, "miners");
-    pool.blocks_found = int_at (sidechain, "found");
-    pool.sidechain_height = unsigned_at (sidechain, "height");
-    const json &found = member (member (sidechain, "last_found"), "main_block");
-    pool.last_found_height = unsigned_at (found, "height");
-    pool.last_found_at = from_unix (unsigned_at (found, "timestamp"));
-    const json &effort = member (sidechain, "effort");
-    pool.effort_current = number_at (effort, "current");
-    pool.effort_average = number_at (effort, "average");
-    const json &mainchain = member (document, "mainchain");
-    pool.main_height = unsigned_at (mainchain, "height");
-    pool.main_difficulty = unsigned_at (mainchain, "difficulty");
-    pool.main_reward = unsigned_at (mainchain, "reward");
-    const json &versions = member (document, "versions");
-    pool.p2pool_version = string_at (member (versions, "p2pool"), "version");
-    pool.monero_version = string_at (member (versions, "monero"), "version");
-    return pool;
-}
-
 NodeInfo
 parse_node_info (std::string_view body)
 {
@@ -430,14 +361,6 @@ estimate (double hashrate, double network_hashrate, double reward_xmr, double wa
     return result;
 }
 
-double
-pool_shares_per_day (double hashrate, const Pool &pool)
-{
-    if (pool.difficulty == 0)
-        return 0;
-    return hashrate * 86400 / static_cast<double> (pool.difficulty);
-}
-
 namespace
 {
 template <typename T>
@@ -447,23 +370,25 @@ struct Stamped
     util::TimePoint fetched{};
 };
 
-struct Chart
-{
-    std::vector<markets::Point> points;
-    std::string provider;
-};
-
 constexpr std::string_view coingecko_coin
     = "https://api.coingecko.com/api/v3/coins/monero?localization=false"
       "&tickers=false&market_data=true&community_data=false&developer_data=false"
       "&sparkline=false";
-constexpr std::string_view kraken_chart
-    = "https://api.kraken.com/0/public/OHLC?pair=XMRUSD&interval=240";
 constexpr std::string_view coingecko_chart
     = "https://api.coingecko.com/api/v3/coins/monero/market_chart"
       "?vs_currency=usd&days=30";
 constexpr std::string_view explorer_default = "https://xmrchain.net";
 constexpr days chart_span{30};
+
+std::vector<markets::Point>
+chart_from (std::string_view body)
+{
+    std::vector<markets::Point> points = markets::last_span (markets::parse_coingecko (body),
+                                         chart_span);
+    if (points.size () < 2)
+        throw std::runtime_error ("CoinGecko: too few prices");
+    return points;
+}
 
 class MarketSource : public Source
 {
@@ -501,18 +426,6 @@ protected:
     }
 };
 
-Chart
-chart_from (std::string_view provider, std::string_view body)
-{
-    Chart chart;
-    chart.provider = provider;
-    chart.points = markets::last_span (provider == "Kraken" ? markets::parse_kraken (body)
-                                       : markets::parse_coingecko (body), chart_span);
-    if (chart.points.size () < 2)
-        throw std::runtime_error (std::format ("{}: too few prices", provider));
-    return chart;
-}
-
 class ChartSource : public Source
 {
 public:
@@ -526,32 +439,16 @@ public:
         stop ();
     }
 
-    Latest<Stamped<Chart>> chart;
+    Latest<Stamped<std::vector<markets::Point>>> chart;
 
 protected:
     void
     fetch () override
     {
-        std::string failures;
-        for (auto [provider, url] :
-                {
-                    std::pair{std::string_view ("Kraken"), kraken_chart},
-                    std::pair{std::string_view ("CoinGecko"), coingecko_chart}
-                })
-            try
-                {
-                    std::string body = http::get (std::string (url));
-                    Chart parsed = chart_from (provider, body);
-                    json wrapped = {{"provider", provider}, {"body", body}};
-                    cache_put ("chart.json", wrapped.dump ());
-                    chart.set ({std::move (parsed), util::Clock::now ()});
-                    return;
-                }
-            catch (const std::exception &error)
-                {
-                    failures += (failures.empty () ? "" : "; ") + std::string (error.what ());
-                }
-        throw std::runtime_error (failures);
+        std::string body = http::get (std::string (coingecko_chart));
+        std::vector<markets::Point> parsed = chart_from (body);
+        cache_put ("chart.json", body);
+        chart.set ({std::move (parsed), util::Clock::now ()});
     }
 
     std::optional<util::TimePoint>
@@ -560,11 +457,7 @@ protected:
         auto cached = cache_get ("chart.json");
         if (!cached)
             return std::nullopt;
-        json wrapped = json::parse (cached->body);
-        chart.set ({chart_from (wrapped.at ("provider").get<std::string> (),
-                                wrapped.at ("body").get<std::string> ()),
-                    cached->saved
-                   });
+        chart.set ({chart_from (cached->body), cached->saved});
         return cached->saved;
     }
 };
@@ -583,7 +476,6 @@ public:
     }
 
     Latest<Stamped<NetworkInfo>> info;
-    Latest<Stamped<std::vector<Block>>> blocks;
 
 protected:
     void
@@ -593,122 +485,20 @@ protected:
         NetworkInfo parsed_info = parse_network_info (info_body);
         cache_put ("networkinfo.json", info_body);
         info.set ({std::move (parsed_info), util::Clock::now ()});
-
-        http::Request blocks_request;
-        blocks_request.url = explorer_ + "/api/transactions?limit=12";
-        blocks_request.timeout = seconds{60};
-        http::Response blocks_response = http::perform (blocks_request);
-        if (!blocks_response.ok ())
-            throw http::Error (std::format ("HTTP {} from {}", blocks_response.status,
-                                            blocks_request.url));
-        std::string blocks_body = std::move (blocks_response.body);
-        std::vector<Block> parsed_blocks = parse_blocks (blocks_body);
-        cache_put ("blocks.json", blocks_body);
-        blocks.set ({std::move (parsed_blocks), util::Clock::now ()});
     }
 
     std::optional<util::TimePoint>
     restore () override
     {
-        std::optional<util::TimePoint> restored;
-        if (auto cached = cache_get ("networkinfo.json"))
-            {
-                info.set ({parse_network_info (cached->body), cached->saved});
-                restored = cached->saved;
-            }
-        if (auto cached = cache_get ("blocks.json"))
-            {
-                blocks.set ({parse_blocks (cached->body), cached->saved});
-                restored = restored ? std::min (*restored, cached->saved) : cached->saved;
-            }
-        return restored;
+        auto cached = cache_get ("networkinfo.json");
+        if (!cached)
+            return std::nullopt;
+        info.set ({parse_network_info (cached->body), cached->saved});
+        return cached->saved;
     }
 
 private:
     std::string explorer_;
-};
-
-std::string
-pool_url (std::string_view name)
-{
-    if (name == "main")
-        return "https://p2pool.observer/api/pool_info";
-    return std::format ("https://{}.p2pool.observer/api/pool_info", name);
-}
-
-class PoolsSource : public Source
-{
-public:
-    PoolsSource (std::vector<std::string> names, seconds interval)
-        : Source ("xmr-pools", interval), names_ (std::move (names))
-    {
-    }
-
-    ~PoolsSource () override
-    {
-        stop ();
-    }
-
-    const std::vector<std::string> &
-    names () const
-    {
-        return names_;
-    }
-
-    Latest<std::vector<std::optional<Stamped<Pool>>>> pools;
-
-protected:
-    void
-    fetch () override
-    {
-        auto previous = pools.get ();
-        std::vector<std::optional<Stamped<Pool>>> next (names_.size ());
-        if (previous)
-            next = *previous;
-        std::string failures;
-        for (std::size_t index = 0; index < names_.size (); ++index)
-            try
-                {
-                    std::string body = http::get (pool_url (names_[index]));
-                    Pool parsed = parse_pool (names_[index], body);
-                    cache_put ("pool-" + names_[index] + ".json", body);
-                    next[index] = Stamped<Pool> {std::move (parsed), util::Clock::now ()};
-                }
-            catch (const std::exception &error)
-                {
-                    failures += std::format ("{}{}: {}", failures.empty () ? "" : "; ",
-                                             names_[index], error.what ());
-                }
-        pools.set (std::move (next));
-        if (!failures.empty ())
-            throw std::runtime_error (failures);
-    }
-
-    std::optional<util::TimePoint>
-    restore () override
-    {
-        std::vector<std::optional<Stamped<Pool>>> restored (names_.size ());
-        std::optional<util::TimePoint> oldest;
-        for (std::size_t index = 0; index < names_.size (); ++index)
-            if (auto cached = cache_get ("pool-" + names_[index] + ".json"))
-                {
-                    try
-                        {
-                            restored[index] = Stamped<Pool> {parse_pool (names_[index], cached->body),
-                                                             cached->saved
-                                                            };
-                            oldest = oldest ? std::min (*oldest, cached->saved) : cached->saved;
-                        }
-                    catch (const std::exception &)
-                        {
-                        }
-                }
-        pools.set (std::move (restored));
-        return oldest;
-    }
-
-private:
-    std::vector<std::string> names_;
 };
 
 struct NodeState
@@ -982,9 +772,8 @@ show_failure (const tui::Rect &inside, const Source &source, bool has_data)
 class XmrScreen : public Screen
 {
 public:
-    XmrScreen (MarketSource &market, ChartSource &chart, ChainSource &chain,
-               PoolsSource &pools, NodeSource *node, Settings settings)
-        : market_ (market), chart_ (chart), chain_ (chain), pools_ (pools), node_ (node),
+    XmrScreen (MarketSource &market, ChartSource &chart, ChainSource &chain, NodeSource *node, Settings settings)
+        : market_ (market), chart_ (chart), chain_ (chain), node_ (node),
           settings_ (std::move (settings)), zone_ (util::zone (settings_.timezone))
     {
     }
@@ -996,7 +785,7 @@ public:
 
     std::vector<Source *> sources () const override
     {
-        std::vector<Source *> all = {&market_, &chart_, &chain_, &pools_};
+        std::vector<Source *> all = {&market_, &chart_, &chain_};
         if (node_)
             all.push_back (node_);
         return all;
@@ -1007,12 +796,9 @@ public:
     {
         if (area.empty ())
             return;
-        int top_height = std::max (8, area.h * 36 / 100);
-        int middle_height = std::max (8, area.h * 34 / 100);
-        tui::Rect top{area.y, area.x, std::min (top_height, area.h), area.w};
-        tui::Rect middle{top.bottom (), area.x,
-                         std::clamp (middle_height, 0, area.bottom () - top.bottom ()), area.w};
-        tui::Rect bottom{middle.bottom (), area.x, area.bottom () - middle.bottom (), area.w};
+        int bottom_height = std::clamp (area.h * 30 / 100, std::min (area.h / 2, 15), 18);
+        tui::Rect top{area.y, area.x, area.h - bottom_height, area.w};
+        tui::Rect bottom{top.bottom (), area.x, area.bottom () - top.bottom (), area.w};
         int left_width = std::clamp (area.w * 30 / 100, 40, 60);
 
         tui::Rect market_cell{top.y, top.x, top.h, left_width};
@@ -1020,36 +806,25 @@ public:
         draw_market (market_cell, now);
         draw_chart (chart_cell, now);
 
-        int rest = middle.w - left_width;
-        int blocks_width = rest * 45 / 100;
-        tui::Rect network_cell{middle.y, middle.x, middle.h, left_width};
-        tui::Rect blocks_cell{middle.y, middle.x + left_width, middle.h, blocks_width};
-        tui::Rect pools_cell{middle.y, blocks_cell.right (), middle.h, middle.right () - blocks_cell.right ()};
+        if (bottom.h < 3)
+            return;
+        int calculator_width = std::clamp (bottom.w * 30 / 100, 40, 60);
+        if (bottom.w - left_width - calculator_width < 40)
+            calculator_width = std::max (0, bottom.w - left_width) / 2;
+        tui::Rect network_cell{bottom.y, bottom.x, bottom.h, left_width};
+        tui::Rect calculator_cell{bottom.y, network_cell.right (), bottom.h, calculator_width};
+        tui::Rect node_cell{bottom.y, calculator_cell.right (), bottom.h,
+                            bottom.right () - calculator_cell.right ()};
         draw_network (network_cell, now);
-        draw_blocks (blocks_cell, now);
-        draw_pools (pools_cell, now);
-
-        if (bottom.h >= 3)
-            {
-                tui::Rect calculator_cell{bottom.y, bottom.x, bottom.h, left_width};
-                tui::Rect node_cell{bottom.y, bottom.x + left_width, bottom.h, bottom.w - left_width};
-                draw_calculator (calculator_cell, now);
-                draw_node (node_cell, now);
-            }
+        draw_calculator (calculator_cell, now);
+        draw_node (node_cell, now);
     }
 
 private:
-    std::optional<double>
-    current_reward () const
+    static double
+    reward ()
     {
-        if (auto pools = pools_.pools.get ())
-            for (const auto &entry : *pools)
-                if (entry && entry->value.main_reward)
-                    return static_cast<double> (entry->value.main_reward) / atomic_units;
-        if (auto blocks = chain_.blocks.get (); blocks && !blocks->value.empty ())
-            return static_cast<double> (tail_emission + blocks->value.front ().fees)
-                   / atomic_units;
-        return std::nullopt;
+        return static_cast<double> (tail_emission) / atomic_units;
     }
 
     void
@@ -1140,9 +915,7 @@ private:
     draw_chart (const tui::Rect &cell, util::TimePoint now)
     {
         auto current = chart_.chart.get ();
-        std::string name = "XMR/USD · 30 days";
-        if (current)
-            name += " · " + current->value.provider;
+        std::string name = "XMR/USD · 30 days · CoinGecko";
         Title title = panel_title ("\U000F012A", "", name, chart_,
                                    current ? std::optional (current->fetched) : std::nullopt, now);
         tui::Rect inside = tui::frame (cell, title.text, title.attributes);
@@ -1151,7 +924,7 @@ private:
         bool failing = show_failure (inside, chart_, current != nullptr);
         if (!current)
             return;
-        const std::vector<markets::Point> &points = current->value.points;
+        const std::vector<markets::Point> &points = current->value;
         markets::Statistics stats = markets::statistics (points);
         int decimals = 2;
         double change = stats.last - stats.open;
@@ -1252,7 +1025,6 @@ private:
     draw_network (const tui::Rect &cell, util::TimePoint now)
     {
         auto info = chain_.info.get ();
-        auto blocks = chain_.blocks.get ();
         Title title = panel_title ("\U000F01A7", "", "Network · xmrchain", chain_,
                                    info ? std::optional (info->fetched) : std::nullopt, now);
         tui::Rect inside = tui::frame (cell, title.text, title.attributes);
@@ -1269,239 +1041,17 @@ private:
                     tui::attr (tui::NORMAL) | A_BOLD);
         lines.pair ("difficulty", format_compact (static_cast<double> (network.difficulty)));
         lines.pair ("hashrate", format_hashrate (network.hashrate), tui::attr (tui::ACCENT));
-        if (blocks && !blocks->value.empty ())
-            {
-                const std::vector<Block> &recent = blocks->value;
-                if (auto average = average_block_time (recent))
-                    {
-                        tui::Role role = *average > seconds{180} ? tui::WARN : tui::NORMAL;
-                        lines.pair ("block time", std::format ("{} avg of last {}",
-                                                               format_duration (*average),
-                                                               recent.size ()),
-                                    tui::attr (role));
-                    }
-                seconds age = duration_cast<seconds> (now - recent.front ().timestamp);
-                lines.pair ("last block", util::format_age (recent.front ().timestamp, now) + " ago",
-                            tui::attr (age > minutes{10} ? tui::WARN : tui::NORMAL));
-                std::uint64_t fees = 0;
-                int transactions = 0;
-                for (const Block &block : recent)
-                    {
-                        fees += block.fees;
-                        transactions += block.transactions;
-                    }
-                lines.pair ("fees/block", format_xmr (static_cast<double> (fees) / atomic_units
-                                                      / static_cast<double> (recent.size ()), 5) + " XMR");
-                if (transactions)
-                    lines.pair ("fee/tx", format_xmr (static_cast<double> (fees) / atomic_units
-                                                      / transactions, 6) + " XMR");
-            }
-        if (auto reward = current_reward ())
-            lines.pair ("reward", format_xmr (*reward, 4) + " XMR");
+        lines.pair ("block time", format_duration (seconds{static_cast<long long> (target_block_seconds)})
+                    + " target");
+        lines.pair ("reward", format_xmr (reward (), 1) + " XMR tail emission");
         lines.pair ("tx pool", std::format ("{} txs · {}", network.tx_pool_size,
                                             util::human_bytes (network.tx_pool_bytes)));
         lines.pair ("transactions", markets::format_price (static_cast<double> (network.tx_count),
                     0));
-        lines.pair ("hard fork", std::format ("v{} · median block {}", network.hard_fork,
-                                              util::human_bytes (network.block_size_median)));
-    }
-
-    void
-    draw_blocks (const tui::Rect &cell, util::TimePoint now)
-    {
-        auto blocks = chain_.blocks.get ();
-        Title title = panel_title ("\U000F01A7", "", "Recent blocks", chain_,
-                                   blocks ? std::optional (blocks->fetched) : std::nullopt, now);
-        tui::Rect inside = tui::frame (cell, title.text, title.attributes);
-        if (inside.empty ())
-            return;
-        if (!blocks)
-            {
-                show_failure (inside, chain_, false);
-                return;
-            }
-        constexpr int height_width = 10;
-        constexpr int age_width = 6;
-        constexpr int count_width = 5;
-        constexpr int size_width = 8;
-        constexpr int fees_width = 10;
-        bool show_size = inside.w >= height_width + age_width + count_width + size_width + 2;
-        bool show_fees = inside.w >= height_width + age_width + count_width + size_width
-                         + fees_width + 2;
-        std::vector<std::pair<std::string, int>> columns =
-        {
-            {"height", height_width}, {"age", age_width}, {"txs", count_width}
-        };
-        if (show_size)
-            columns.emplace_back ("size", size_width);
-        if (show_fees)
-            columns.emplace_back ("fees XMR", fees_width);
-        int row = inside.y;
-        int column = inside.x + 1;
-        for (const auto &[header, width] : columns)
-            {
-                tui::put (row, column, tui::pad (header, width - 1, header == "height" ? 'l' : 'r'),
-                          tui::attr (tui::DIM) | A_BOLD);
-                column += width;
-            }
-        ++row;
-        for (const Block &block : blocks->value)
-            {
-                if (row >= inside.bottom ())
-                    break;
-                column = inside.x + 1;
-                std::vector<std::string> cells =
-                {
-                    markets::format_price (static_cast<double> (block.height), 0),
-                    util::format_age (block.timestamp, now),
-                    std::to_string (block.transactions),
-                };
-                if (show_size)
-                    cells.push_back (util::human_bytes (block.size));
-                if (show_fees)
-                    cells.push_back (format_xmr (static_cast<double> (block.fees) / atomic_units, 5));
-                for (std::size_t index = 0; index < cells.size (); ++index)
-                    {
-                        attr_t attributes = tui::attr (index == 0 ? tui::TITLE : tui::NORMAL);
-                        if (index == 2 && block.transactions == 0)
-                            attributes = tui::attr (tui::DIM);
-                        tui::put (row, column, tui::pad (cells[index], columns[index].second - 1,
-                                                         index == 0 ? 'l' : 'r'), attributes);
-                        column += columns[index].second;
-                    }
-                ++row;
-            }
-    }
-
-    void
-    draw_pools (const tui::Rect &cell, util::TimePoint now)
-    {
-        auto pools = pools_.pools.get ();
-        std::optional<util::TimePoint> oldest;
-        bool any = false;
-        if (pools)
-            for (const auto &entry : *pools)
-                if (entry)
-                    {
-                        any = true;
-                        oldest = oldest ? std::min (*oldest, entry->fetched) : entry->fetched;
-                    }
-        Title title = panel_title ("\U000F0849", "", "P2Pool · p2pool.observer", pools_, oldest,
-                                   now);
-        tui::Rect inside = tui::frame (cell, title.text, title.attributes);
-        if (inside.empty ())
-            return;
-        bool failing = show_failure (inside, pools_, any);
-        if (!any)
-            return;
-        const std::vector<std::string> &names = pools_.names ();
-        constexpr int label_width = 11;
-        int column_width = std::max (8, (inside.w - 2 - label_width)
-                                     / std::max<int> (1, static_cast<int> (names.size ())));
-        bool tight = column_width < 11;
-        int bottom_row = inside.bottom () - (failing ? 1 : 0);
-        int row = inside.y;
-        auto put_row = [&] (std::string_view label, auto value_of, auto role_of)
-        {
-            if (row >= bottom_row)
-                return;
-            tui::put (row, inside.x + 1, label, tui::attr (tui::DIM));
-            for (std::size_t index = 0; index < names.size (); ++index)
-                {
-                    int column = inside.x + 1 + label_width
-                                 + static_cast<int> (index) * column_width;
-                    if (column + column_width > inside.right ())
-                        break;
-                    const auto &entry = (*pools)[index];
-                    if (!entry)
-                        {
-                            tui::put (row, column, tui::pad ("—", column_width - 1, 'r'),
-                                      tui::attr (tui::DIM));
-                            continue;
-                        }
-                    tui::put (row, column, tui::pad (tui::fit (value_of (entry->value),
-                                                     column_width - 1), column_width - 1, 'r'),
-                              tui::attr (role_of (entry->value)));
-                }
-            ++row;
-        };
-        auto normal = [] (const Pool &)
-        {
-            return tui::NORMAL;
-        };
-        put_row ("", [] (const Pool &pool)
-        {
-            return pool.name;
-        }, [] (const Pool &)
-        {
-            return tui::TITLE;
-        });
-        put_row ("hashrate", [tight] (const Pool &pool)
-        {
-            std::string text = format_hashrate (pool.hashrate);
-            if (tight)
-                std::erase (text, ' ');
-            return text;
-        }, [] (const Pool &)
-        {
-            return tui::ACCENT;
-        });
-        double network_hashrate = 0;
-        if (auto info = chain_.info.get ())
-            network_hashrate = info->value.hashrate;
-        if (network_hashrate > 0)
-            put_row ("of network", [network_hashrate] (const Pool &pool)
-            {
-                return std::format ("{:.2f}%", pool.hashrate / network_hashrate * 100);
-            }, normal);
-        put_row ("miners", [] (const Pool &pool)
-        {
-            return markets::format_price (pool.active_miners, 0);
-        }, normal);
-        put_row ("all-time", [] (const Pool &pool)
-        {
-            return markets::format_price (pool.total_miners, 0);
-        }, [] (const Pool &)
-        {
-            return tui::DIM;
-        });
-        put_row ("share diff", [] (const Pool &pool)
-        {
-            return format_compact (static_cast<double> (pool.difficulty));
-        }, normal);
-        put_row ("last block", [now] (const Pool &pool)
-        {
-            return util::format_age (pool.last_found_at, now) + " ago";
-        }, normal);
-        put_row ("at height", [] (const Pool &pool)
-        {
-            return std::to_string (pool.last_found_height);
-        }, [] (const Pool &)
-        {
-            return tui::DIM;
-        });
-        put_row ("effort", [] (const Pool &pool)
-        {
-            return std::format ("{:.0f}%", pool.effort_current);
-        }, [] (const Pool &pool)
-        {
-            return pool.effort_current > 300 ? tui::WARN : tui::NORMAL;
-        });
-        put_row ("avg effort", [] (const Pool &pool)
-        {
-            return std::format ("{:.0f}%", pool.effort_average);
-        }, normal);
-        put_row ("found", [] (const Pool &pool)
-        {
-            return markets::format_price (pool.blocks_found, 0);
-        }, normal);
-        put_row ("version", [] (const Pool &pool)
-        {
-            return pool.p2pool_version;
-        }, [] (const Pool &)
-        {
-            return tui::DIM;
-        });
+        lines.pair ("hard fork", std::format ("v{}", network.hard_fork));
+        lines.pair ("median block", util::human_bytes (network.block_size_median));
+        lines.pair ("peers", std::format ("{} in · {} out", network.incoming_connections,
+                                          network.outgoing_connections), tui::attr (tui::DIM));
     }
 
     void
@@ -1514,9 +1064,8 @@ private:
         if (inside.empty ())
             return;
         auto info = chain_.info.get ();
-        auto reward = current_reward ();
         Lines lines (inside, 12);
-        if (!info || !reward)
+        if (!info)
             {
                 lines.text ("Waiting for network data…", tui::attr (tui::DIM));
                 return;
@@ -1528,7 +1077,7 @@ private:
             if (auto found = market->value.price.find (settings_.currency);
                     found != market->value.price.end ())
                 local = found->second;
-        Estimate result = estimate (settings_.hashrate, info->value.hashrate, *reward,
+        Estimate result = estimate (settings_.hashrate, info->value.hashrate, reward (),
                                     settings_.watts, settings_.price_per_kwh);
         lines.pair ("setup", std::format ("{} W · {} /kWh", settings_.watts,
                                           money (settings_.currency, settings_.price_per_kwh)));
@@ -1567,23 +1116,8 @@ private:
             }
         lines.pair ("solo block", std::format ("every {} on average",
                                                format_duration (result.solo_block_time)));
-        if (auto pools = pools_.pools.get ())
-            for (const auto &entry : *pools)
-                if (entry)
-                    {
-                        double shares = pool_shares_per_day (settings_.hashrate, entry->value);
-                        if (shares <= 0)
-                            continue;
-                        attr_t attributes = tui::attr (shares < 1 ? tui::WARN : tui::NORMAL);
-                        lines.pair ("p2pool " + entry->value.name,
-                        Segments{{std::format ("{:.1f} shares/day", shares), attributes},
-                            {" · ", tui::attr (tui::FRAME)},
-                            {
-                                "one every " + format_duration (seconds{static_cast<long long> (86400 / shares)}),
-                                tui::attr (tui::DIM)
-                            }});
-                    }
-        lines.pair ("reward", format_xmr (*reward, 4) + " XMR/block", tui::attr (tui::DIM));
+        lines.pair ("reward", format_xmr (reward (), 1) + " XMR/block, no fees",
+                    tui::attr (tui::DIM));
     }
 
     void
@@ -1709,7 +1243,6 @@ private:
     MarketSource &market_;
     ChartSource &chart_;
     ChainSource &chain_;
-    PoolsSource &pools_;
     NodeSource *node_;
     Settings settings_;
     const std::chrono::time_zone *zone_;
@@ -1743,33 +1276,18 @@ install_xmr (App &app)
     while (explorer.ends_with ('/'))
         explorer.pop_back ();
 
-    std::vector<std::string> pool_names;
-    if (const toml::array *names = table["pools"].as_array ())
-        for (const toml::node &entry : *names)
-            {
-                std::string name = entry.value_or<std::string> ("");
-                if (name != "main" && name != "mini" && name != "nano")
-                    throw std::runtime_error (std::format (
-                                                  "[xmr] pools: unknown pool '{}' (use main, mini or nano)", name));
-                pool_names.push_back (name);
-            }
-    else
-        pool_names = {"main", "mini", "nano"};
-
     auto &market = app.add_source (std::make_unique<MarketSource> (
                                        interval_of ("market_interval", 600)));
     auto &chart = app.add_source (std::make_unique<ChartSource> (
                                       interval_of ("chart_interval", 1800)));
     auto &chain = app.add_source (std::make_unique<ChainSource> (
                                       explorer, interval_of ("network_interval", 120)));
-    auto &pools = app.add_source (std::make_unique<PoolsSource> (
-                                      std::move (pool_names), interval_of ("pools_interval", 300)));
     NodeSource *node = nullptr;
     std::string node_address = table["node"].value_or<std::string> ("");
     if (!util::trim (node_address).empty ())
         node = &app.add_source (std::make_unique<NodeSource> (
                                     node_rpc_url (node_address), table["node_direct"].value_or (true),
                                     interval_of ("node_interval", 30)));
-    app.add_screen (std::make_unique<XmrScreen> (market, chart, chain, pools, node,
+    app.add_screen (std::make_unique<XmrScreen> (market, chart, chain, node,
                     std::move (settings)));
 }

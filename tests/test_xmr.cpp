@@ -92,54 +92,6 @@ main ()
             xmr::parse_network_info (R"({"status":"fail","message":"down"})");
         }));
 
-        std::vector<xmr::Block> blocks = xmr::parse_blocks (check::data ("xmr-blocks.json"));
-        CHECK (blocks.size () == 10);
-        CHECK (blocks.front ().height == 3777600);
-        CHECK (blocks.back ().height == 3777591);
-        CHECK (blocks.front ().transactions == 67);
-        CHECK (blocks.front ().size == 137388);
-        CHECK (blocks.front ().fees == 9783000000ULL);
-        CHECK (blocks.front ().timestamp == util::TimePoint{seconds{1791224684}});
-        CHECK (blocks[5].height == 3777595 && blocks[5].transactions == 0);
-        auto average = xmr::average_block_time (blocks);
-        CHECK (average.has_value () && *average == seconds{
-            (1791224684 - blocks.back ()
-            .timestamp.time_since_epoch () / seconds{1}) / 9});
-        CHECK (!xmr::average_block_time ({blocks.front ()}).has_value ());
-
-        std::vector<xmr::Block> with_coinbase = xmr::parse_blocks (
-            R"({"status":"success","data":{"blocks":[{"height":7,"timestamp":100,"size":300.0,)"
-            R"("txs":[{"coinbase":true,"tx_fee":0,"tx_size":180},)"
-            R"({"coinbase":false,"tx_fee":5000,"tx_size":120}]}]}})");
-        CHECK (with_coinbase.size () == 1);
-        CHECK (with_coinbase[0].transactions == 1 && with_coinbase[0].fees == 5000);
-
-        xmr::Pool main_pool = xmr::parse_pool ("main", check::data ("xmr-p2pool-main.json"));
-        CHECK (main_pool.name == "main");
-        CHECK (main_pool.difficulty == 4400400227ULL);
-        CHECK (main_pool.block_time == 10);
-        CHECK (near (main_pool.hashrate, 440040022.7));
-        CHECK (main_pool.active_miners == 46);
-        CHECK (main_pool.total_miners == 10984);
-        CHECK (main_pool.blocks_found == 77023);
-        CHECK (main_pool.last_found_height == 3777565);
-        CHECK (main_pool.last_found_at == util::TimePoint{seconds{1791220486}});
-        CHECK (near (main_pool.effort_current, 235.24167555371847));
-        CHECK (main_pool.main_reward == 602036020000ULL);
-        CHECK (main_pool.main_height == 3777601);
-        CHECK (main_pool.p2pool_version == "v4.18.1");
-        CHECK (main_pool.monero_version == "v0.18.5.1");
-
-        xmr::Pool mini_pool = xmr::parse_pool ("mini", check::data ("xmr-p2pool-mini.json"));
-        CHECK (mini_pool.difficulty == 269216270ULL);
-        CHECK (mini_pool.active_miners == 682);
-        CHECK (mini_pool.last_found_height == 3777449);
-        CHECK (near (xmr::pool_shares_per_day (10000, mini_pool), 10000.0 * 86400 / 269216270));
-        CHECK (throws ([]
-        {
-            xmr::parse_pool ("main", "{\"error\":\"nope\"}");
-        }));
-
         xmr::NodeInfo restricted = xmr::parse_node_info (
             check::data ("xmr-getinfo-restricted.json"));
         CHECK (restricted.height == 3777602);

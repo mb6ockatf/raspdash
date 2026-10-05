@@ -1,4 +1,4 @@
-/* xmr.hpp -- the XMR screen: Monero market, network, pools and node.
+/* xmr.hpp -- the XMR screen: Monero market, network and node.
 
    Copyright (C) 2026 mb6ockatf
 
@@ -76,42 +76,6 @@ struct NetworkInfo
 
 NetworkInfo parse_network_info (std::string_view body);
 
-struct Block
-{
-    std::uint64_t height = 0;
-    util::TimePoint timestamp{};
-    int transactions = 0;
-    std::uint64_t size = 0;
-    std::uint64_t fees = 0;
-};
-
-std::vector<Block> parse_blocks (std::string_view body);
-
-std::optional<std::chrono::seconds> average_block_time (const std::vector<Block> &blocks);
-
-struct Pool
-{
-    std::string name;
-    double hashrate = 0;
-    std::uint64_t difficulty = 0;
-    int block_time = 10;
-    int active_miners = 0;
-    int total_miners = 0;
-    int blocks_found = 0;
-    std::uint64_t sidechain_height = 0;
-    std::uint64_t last_found_height = 0;
-    util::TimePoint last_found_at{};
-    double effort_current = 0;
-    double effort_average = 0;
-    std::uint64_t main_height = 0;
-    std::uint64_t main_difficulty = 0;
-    std::uint64_t main_reward = 0;
-    std::string p2pool_version;
-    std::string monero_version;
-};
-
-Pool parse_pool (std::string_view name, std::string_view body);
-
 struct NodeInfo
 {
     std::uint64_t height = 0;
@@ -166,6 +130,4 @@ struct Estimate
 
 Estimate estimate (double hashrate, double network_hashrate, double reward_xmr,
                    double watts, double price_per_kwh);
-
-double pool_shares_per_day (double hashrate, const Pool &pool);
 }

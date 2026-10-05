@@ -11,8 +11,8 @@ A full-screen terminal dashboard for a Raspberry Pi.  It shows:
   6. Weather    -- forecasts from MET Norway for configured cities
   7-9. Markets  -- month and half-year candlestick charts (XAUT/USDT, TON/USDT;
                    BTC/USD, USD/RUB) and a comparison chart
-  10. XMR       -- Monero: market, 30-day chart, network, recent blocks,
-                   P2Pool, a mining calculator and your own node
+  10. XMR       -- Monero: market, 30-day chart, network, a mining
+                   calculator and your own node
 
 Building from a git checkout:
 

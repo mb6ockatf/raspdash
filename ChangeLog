@@ -1,5 +1,28 @@
 2026-10-05  mb6ockatf
 
+	Drop the XMR sources that the Pi's network blocks.
+	* src/xmr.cpp (ChartSource): Use CoinGecko only; drop Kraken.
+	(Chart, chart_from): Replace with a chart_from that parses CoinGecko.
+	(ChainSource): Fetch only /api/networkinfo; drop the block list.
+	(pool_url, PoolsSource): Remove.
+	(XmrScreen): Drop the Recent blocks and P2Pool panels; lay the rest
+	out in two bands.
+	(XmrScreen::current_reward): Replace with reward, the tail emission.
+	(XmrScreen::draw_network): Drop the figures taken from the block
+	list; show the block target, median block size and explorer peers.
+	(XmrScreen::draw_calculator): Drop the P2Pool shares per day.
+	(install_xmr): Drop the pools and pools_interval keys.
+	(parse_blocks, average_block_time, parse_pool, pool_shares_per_day):
+	Remove.
+	* src/xmr.hpp (Block, Pool): Remove, with the functions above.
+	* tests/test_xmr.cpp: Drop their tests.
+	* tests/data/xmr-blocks.json, tests/data/xmr-p2pool-main.json,
+	tests/data/xmr-p2pool-mini.json: Remove.
+	* doc/xmr.texi: Document the change and why.
+	* doc/raspdash.texi, README, config.example.toml: Follow it.
+
+2026-10-05  mb6ockatf
+
 	* src/xmr.cpp (NetworkSource::fetch): Ask for 12 blocks with a
 	60-second timeout; 15 timed out on the Pi.
 	* src/app.cpp (App::run): Key 0 shows the tenth screen.

@@ -110,7 +110,7 @@ and half a year, on two
 screens (XAUT and TON; BTC and USD/RUB), and a chart comparing them.
 @item
 @strong{XMR}: Monero on one page: market data, a 30-day price chart,
-the network and its recent blocks, P2Pool, a mining calculator and the
+the network, a mining calculator and the
 state of your own @command{monerod}.
 @end enumerate
 
@@ -144,7 +144,6 @@ only when its data is older than that:
 @item XMR market @tab 10 minutes @tab ---
 @item XMR chart @tab 30 minutes @tab ---
 @item XMR network @tab 2 minutes @tab ---
-@item XMR pools @tab 5 minutes @tab ---
 @item XMR node @tab 30 seconds @tab ---
 @end multitable
 

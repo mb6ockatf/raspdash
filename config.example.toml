@@ -207,9 +207,8 @@ parallel = 256
 # ports = [ { port = 22, name = "ssh" }, { port = 80, name = "http" } ]
 
 [xmr]
-# Monero on one screen: market (CoinGecko), a 30-day chart (Kraken, or
-# CoinGecko), network and recent blocks (xmrchain.net), P2Pool
-# (p2pool.observer), a mining calculator and your own monerod.
+# Monero on one screen: market and a 30-day chart (CoinGecko), network
+# (xmrchain.net), a mining calculator and your own monerod.
 # Mining calculator: the rig's hash rate in H/s, its power draw in watts
 # and the price of a kWh in `currency` (as CoinGecko names it).
 hashrate_hs = 10000
@@ -222,8 +221,6 @@ currency = "rub"
 # node = "http://192.168.1.10:18081"
 # Bypass the proxy for the node (right for a node on the LAN).
 node_direct = true
-# P2Pool sidechains to show, in order: main, mini, nano.
-pools = ["main", "mini", "nano"]
 # Mondays on the chart's time axis are midnights in this zone.
 timezone = "Europe/Moscow"
 # An onion-monero-blockchain-explorer with its JSON API.
@@ -232,5 +229,4 @@ timezone = "Europe/Moscow"
 market_interval = 600
 chart_interval = 1800
 network_interval = 120
-pools_interval = 300
 node_interval = 30
