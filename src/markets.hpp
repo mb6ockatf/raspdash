@@ -73,7 +73,7 @@ struct Chart
     std::vector<Provider> providers;
     std::string screen = "Markets";
     Range range = range_of (Span::week);
-    std::string color;
+    std::string color{};
 };
 
 struct Result
