@@ -119,10 +119,12 @@ ranges = ["month", "half-year"]
 # screen, one row each; each screen gets its own tab.  Providers are
 # tried in order; the first one with fresh data wins.  Without any
 # [[markets.charts]] these four are built in.  icon is a Nerd Font
-# glyph, shown when [app] icons = "nerd".
+# glyph, shown when [app] icons = "nerd".  color is the plot's colour:
+# yellow, green, blue, cyan, magenta, red, orange or white.
 
 [[markets.charts]]
 name = "XAUT/USDT"
+color = "yellow"
 screen = "XAUT · TON"
 icon = "\U000F124F"            # md-gold
 decimals = 1
@@ -135,6 +137,7 @@ providers = [
 
 [[markets.charts]]
 name = "TON/USDT"
+color = "blue"
 screen = "XAUT · TON"
 icon = "\U000F01C8"            # md-diamond_stone
 decimals = 3
@@ -147,6 +150,7 @@ providers = [
 
 [[markets.charts]]
 name = "BTC/USD"
+color = "green"
 screen = "BTC · RUB"
 icon = "\U000F0813"            # md-bitcoin
 decimals = 0
@@ -159,6 +163,7 @@ providers = [
 
 [[markets.charts]]
 name = "USD/RUB"
+color = "green"
 screen = "BTC · RUB"
 icon = "\U000F01B1"            # md-currency_rub
 decimals = 2

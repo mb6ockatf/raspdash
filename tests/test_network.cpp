@@ -53,7 +53,7 @@ main ()
         CHECK (network::http_detail ("HTTP/1.0 404 Not Found\r\n\r\n") == "404");
 
         CHECK (network::services_text ({{22, "ssh", "OpenSSH_9.2p1"}, {80, "http", ""}})
-        == "ssh (OpenSSH_9.2p1) · http");
+        == "ssh:22 (OpenSSH_9.2p1) · http:80");
 
         network::Scan scan;
         scan.interface = "wlan0";

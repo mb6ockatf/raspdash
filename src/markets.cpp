@@ -502,28 +502,49 @@ default_charts ()
                 {"binance", "XAUTUSDT"},
                 {"bybit", "XAUTUSDT"},
                 {"coingecko", "tether-gold"},
-            }, "XAUT · TON"
+            }, "XAUT · TON", range_of (Span::week), "yellow"
         },
         {
             "TON/USDT", "\U000F01C8", 3, hours{6}, {
                 {"kraken", "TONUSD"},
                 {"coingecko", "the-open-network"},
                 {"binance", "TONUSDT"},
-            }, "XAUT · TON"
+            }, "XAUT · TON", range_of (Span::week), "blue"
         },
         {
             "BTC/USD", "\U000F0813", 0, hours{6}, {
                 {"coinbase", "BTC-USD"},
                 {"kraken", "XBTUSD"},
                 {"binance", "BTCUSDT"},
-            }, "BTC · RUB"
+            }, "BTC · RUB", range_of (Span::week), "green"
         },
         {
             "USD/RUB", "\U000F01B1", 2, hours{100}, {
                 {"cbr", "R01235"},
-            }, "BTC · RUB"
+            }, "BTC · RUB", range_of (Span::week), "green"
         },
     };
+}
+
+namespace
+{
+const std::pair<std::string_view, tui::Role> plot_colors[] =
+{
+    {"yellow", tui::PLOT_YELLOW}, {"gold", tui::PLOT_YELLOW},
+    {"green", tui::PLOT_GREEN}, {"blue", tui::PLOT_BLUE},
+    {"cyan", tui::PLOT_CYAN}, {"magenta", tui::PLOT_MAGENTA},
+    {"red", tui::PLOT_RED}, {"orange", tui::PLOT_ORANGE},
+    {"white", tui::PLOT_WHITE},
+};
+}
+
+bool
+known_color (std::string_view name)
+{
+    return std::ranges::any_of (plot_colors, [name] (const auto &entry)
+    {
+        return entry.first == name;
+    });
 }
 
 std::vector<Chart>
@@ -748,9 +769,12 @@ public:
                                              std::ranges::find (instruments, chart.name) - instruments.begin ());
                 std::vector<tui::Rect> cells
                     = rows[position / column_count].columns (column_count, 0);
+                tui::Role color = series[instrument % 4];
+                for (const auto &[name, role] : plot_colors)
+                    if (name == chart.color)
+                        color = role;
                 draw_chart (cells[position % column_count], chart,
-                            (*states)[chart_indices_[position]],
-                            series[instrument % 4], now);
+                            (*states)[chart_indices_[position]], color, now);
             }
     }
 
@@ -977,6 +1001,11 @@ read_charts (const toml::table &t)
             c.decimals = (*ct)["decimals"].value_or (-1);
             c.max_age = hours ((*ct)["max_age_hours"].value_or (6));
             c.screen = (*ct)["screen"].value_or<std::string> ("Markets");
+            c.color = (*ct)["color"].value_or<std::string> ("");
+            if (!c.color.empty () && !known_color (c.color))
+                throw std::runtime_error (std::format (
+                                              "markets chart '{}': unknown color '{}' (yellow, green, blue, "
+                                              "cyan, magenta, red, orange, white)", c.name, c.color));
             if (const toml::array *ps = (*ct)["providers"].as_array ())
                 for (const toml::node &pn : *ps)
                     {

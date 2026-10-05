@@ -12,7 +12,8 @@ The @dfn{Network} screen lists the devices on the local network and the
 services each of them offers.  Every ten minutes raspdash tries a TCP
 connection to a list of well-known ports on every address of its own
 subnet, then shows one row per device: its address, a name, its MAC
-address and the open ports with the service names.  For SSH it adds the
+address and the open ports, each as the service name and the port
+number, such as @samp{ssh:22}.  For SSH it adds the
 server's version from its greeting (@samp{OpenSSH_8.4p1
 Raspbian-5+deb11u7}), and for plain HTTP ports the @samp{Server} header
 of the answer to a @samp{HEAD} request.  The machine raspdash runs on

@@ -161,6 +161,14 @@ init ()
             define (SERIES2, rich ? 214 : COLOR_YELLOW, -1);
             define (SERIES3, rich ? 114 : COLOR_GREEN, -1);
             define (SERIES4, rich ? 176 : COLOR_MAGENTA, -1);
+            define (PLOT_YELLOW, rich ? 220 : COLOR_YELLOW, -1);
+            define (PLOT_GREEN, rich ? 77 : COLOR_GREEN, -1);
+            define (PLOT_BLUE, rich ? 33 : COLOR_BLUE, -1, rich ? 0 : A_BOLD);
+            define (PLOT_CYAN, rich ? 51 : COLOR_CYAN, -1);
+            define (PLOT_MAGENTA, rich ? 170 : COLOR_MAGENTA, -1);
+            define (PLOT_RED, rich ? 203 : COLOR_RED, -1);
+            define (PLOT_ORANGE, rich ? 208 : COLOR_YELLOW, -1);
+            define (PLOT_WHITE, rich ? 255 : COLOR_WHITE, -1);
         }
     else
         {

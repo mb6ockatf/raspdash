@@ -171,7 +171,7 @@ services_text (const std::vector<Service> &services)
         {
             if (!text.empty ())
                 text += " · ";
-            text += service.name;
+            text += std::format ("{}:{}", service.name, service.port);
             if (!service.detail.empty ())
                 text += " (" + service.detail + ")";
         }

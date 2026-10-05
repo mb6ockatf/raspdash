@@ -73,6 +73,7 @@ struct Chart
     std::vector<Provider> providers;
     std::string screen = "Markets";
     Range range = range_of (Span::week);
+    std::string color;
 };
 
 struct Result
@@ -135,6 +136,8 @@ struct Statistics
 Statistics statistics (const std::vector<Point> &points);
 
 std::vector<Chart> default_charts ();
+
+bool known_color (std::string_view name);
 
 std::vector<Chart> expand_ranges (const std::vector<Chart> &instruments,
                                   const std::vector<Range> &ranges);

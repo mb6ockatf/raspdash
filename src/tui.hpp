@@ -48,6 +48,14 @@ enum Role : short
     SERIES2,
     SERIES3,
     SERIES4,
+    PLOT_YELLOW,
+    PLOT_GREEN,
+    PLOT_BLUE,
+    PLOT_CYAN,
+    PLOT_MAGENTA,
+    PLOT_RED,
+    PLOT_ORANGE,
+    PLOT_WHITE,
     ROLE_COUNT
 };
 

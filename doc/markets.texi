@@ -165,6 +165,12 @@ The title of the screen the instrument is drawn on.  Instruments with
 the same @code{screen} share it, one row each, and screens appear in
 the order their first instrument is listed, in place of
 @samp{markets} in @code{[app] screens}.  Default @samp{Markets}.
+@item color
+The colour of the plot line: @samp{yellow}, @samp{green}, @samp{blue},
+@samp{cyan}, @samp{magenta}, @samp{red}, @samp{orange} or
+@samp{white}.  The defaults draw XAUT in yellow, TON in blue and the
+dollar pairs (BTC/USD, USD/RUB) in green.  Without it, instruments take
+the four series colours in turn.
 @item icon
 A Nerd Font glyph shown before the name when @code{[app] icons} is
 @samp{nerd}, written as a TOML escape such as @samp{"\U000F0813"}.

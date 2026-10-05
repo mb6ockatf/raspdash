@@ -1,5 +1,13 @@
 2026-10-05  mb6ockatf
 
+	* src/tui.cpp, src/tui.hpp (PLOT_YELLOW, ...): New plot colours.
+	* src/markets.cpp, src/markets.hpp (Chart::color, known_color):
+	A fixed colour per instrument: XAUT yellow, TON blue, the dollar
+	pairs green.
+	* src/network.cpp (services_text): Show each service's port.
+	* config.example.toml, doc/markets.texi, doc/network.texi,
+	tests/test_network.cpp: Likewise.
+
 	* src/network.cpp, src/network.hpp: New Network screen: a TCP port
 	scan of the local subnet listing each device's open ports, SSH
 	version and HTTP server.
