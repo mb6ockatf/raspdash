@@ -284,6 +284,12 @@ App::run (std::string_view start_screen)
                         select (9);
                     else if (ch == KEY_RIGHT || ch == '\t' || ch == ' ' || ch == 'l')
                         select (current_ + 1);
+                    else if (ch == KEY_MOUSE)
+                        {
+                            MEVENT event;
+                            if (getmouse (&event) == OK && (event.bstate & BUTTON1_PRESSED))
+                                select (current_ + 1);
+                        }
                     else if (ch == KEY_LEFT || ch == KEY_BTAB || ch == 'h')
                         select (current_ + screens_.size () - 1);
                     else if (ch == 'r' || ch == 'R')

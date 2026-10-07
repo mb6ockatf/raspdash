@@ -140,6 +140,8 @@ init ()
     cbreak ();
     noecho ();
     keypad (stdscr, TRUE);
+    mouseinterval (0);
+    mousemask (BUTTON1_PRESSED, nullptr);
     curs_set (0);
     if (has_colors ())
         {

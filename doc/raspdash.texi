@@ -406,7 +406,9 @@ Show that screen; @kbd{0} shows the tenth.
 @itemx @key{TAB}
 @itemx @key{SPC}
 @itemx l
-Next screen.
+@itemx Left mouse button
+Next screen.  A click anywhere on the screen works, so a mouse alone
+is enough to page through the screens.
 @item @key{LEFT}
 @itemx S-@key{TAB}
 @itemx h
