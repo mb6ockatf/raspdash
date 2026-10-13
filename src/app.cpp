@@ -270,7 +270,7 @@ App::run (std::string_view start_screen)
                 }
             refresh ();
 
-            int ch = getch ();
+            int ch = tui::read_key ();
             auto steady = std::chrono::steady_clock::now ();
             if (ch != ERR && ch != KEY_RESIZE)
                 {
@@ -284,12 +284,8 @@ App::run (std::string_view start_screen)
                         select (9);
                     else if (ch == KEY_RIGHT || ch == '\t' || ch == ' ' || ch == 'l')
                         select (current_ + 1);
-                    else if (ch == KEY_MOUSE)
-                        {
-                            MEVENT event;
-                            if (getmouse (&event) == OK && (event.bstate & BUTTON1_PRESSED))
-                                select (current_ + 1);
-                        }
+                    else if (ch == tui::KEY_CLICK)
+                        select (current_ + 1);
                     else if (ch == KEY_LEFT || ch == KEY_BTAB || ch == 'h')
                         select (current_ + screens_.size () - 1);
                     else if (ch == 'r' || ch == 'R')

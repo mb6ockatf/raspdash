@@ -1,5 +1,16 @@
 2026-10-13  mb6ockatf
 
+	Read mouse clicks without ncurses, which could freeze the dashboard.
+	* src/tui.cpp (init): Turn off ncurses mouse decoding with keyok;
+	ask the terminal for SGR mouse reports.
+	(shutdown): Turn the reports off.
+	(read_key): New; wraps getch and turns a left-button SGR report
+	into KEY_CLICK, dropping incomplete or other escape sequences.
+	* src/tui.hpp (KEY_CLICK, read_key): Declare.
+	* src/app.cpp (App::run): Use tui::read_key; show the next screen
+	on KEY_CLICK.
+	* doc/raspdash.texi (Keys): Document it.
+
 	* deploy/raspdash-kiosk: Wait for the window manager before starting
 	alacritty, so its full-screen request is not lost at login.
 	* doc/raspdash.texi (Kiosk launcher): Document it.

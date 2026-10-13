@@ -68,8 +68,12 @@ bool nerd_icons ();
 
 const char *icon (const char *nerd, const char *fallback);
 
+constexpr int KEY_CLICK = KEY_MAX + 1;
+
 void init ();
 void shutdown ();
+
+int read_key ();
 
 int width (std::string_view utf8);
 

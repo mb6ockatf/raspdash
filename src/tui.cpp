@@ -25,6 +25,7 @@
 #include <climits>
 #include <clocale>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cwchar>
 
@@ -140,8 +141,9 @@ init ()
     cbreak ();
     noecho ();
     keypad (stdscr, TRUE);
-    mouseinterval (0);
-    mousemask (BUTTON1_PRESSED, nullptr);
+    keyok (KEY_MOUSE, FALSE);
+    std::fputs ("\033[?1000h\033[?1006h", stdout);
+    std::fflush (stdout);
     curs_set (0);
     if (has_colors ())
         {
@@ -186,6 +188,32 @@ void
 shutdown ()
 {
     endwin ();
+    std::fputs ("\033[?1006l\033[?1000l", stdout);
+    std::fflush (stdout);
+}
+
+int
+read_key ()
+{
+    int ch = getch ();
+    if (ch != 27)
+        return ch;
+    int delay = wgetdelay (stdscr);
+    timeout (50);
+    std::string sequence;
+    for (int next = getch (); next != ERR && next < 256; next = getch ())
+        {
+            sequence.push_back (static_cast<char> (next));
+            if ((sequence.size () > 1 && next >= 0x40 && next <= 0x7e)
+                    || sequence.size () >= 32)
+                break;
+        }
+    timeout (delay);
+    if (sequence.empty ())
+        return 27;
+    if (sequence.starts_with ("[<0;") && sequence.ends_with ('M'))
+        return KEY_CLICK;
+    return ERR;
 }
 
 int

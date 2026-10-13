@@ -416,7 +416,12 @@ Show that screen; @kbd{0} shows the tenth.
 @itemx l
 @itemx Left mouse button
 Next screen.  A click anywhere on the screen works, so a mouse alone
-is enough to page through the screens.
+is enough to page through the screens.  raspdash asks the terminal for
+SGR mouse reports (modes 1000 and 1006) and reads them itself rather
+than through ncurses: ncurses 6.2, the Pi's version, waits without a
+time limit for the rest of a mouse report it has started to read, and
+a report that never completes froze the whole dashboard.  raspdash
+gives a report 50 milliseconds and drops it if it is incomplete.
 @item @key{LEFT}
 @itemx S-@key{TAB}
 @itemx h
