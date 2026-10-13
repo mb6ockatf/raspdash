@@ -302,6 +302,16 @@ so the launcher first waits, for up to 30 seconds, until
 (@samp{_NET_SUPPORTING_WM_CHECK}).  Without @command{xprop} it does not
 wait.
 
+@cindex restart
+The launcher restarts raspdash every 3 hours, so an instance that hangs
+or slowly goes wrong does not stay on the screen.  It runs raspdash
+under @command{timeout}, which sends @code{SIGTERM}; raspdash quits
+cleanly on it and comes back three seconds later, with the data its
+sources cached.  An instance that does not quit within two minutes is
+killed.  Set @env{RASPDASH_RESTART} to change the period, in the form
+@command{timeout} takes (@samp{90m}, @samp{6h}), or to @samp{0} to
+turn the restarts off.
+
 Other variables it reads:
 
 @table @env
@@ -314,6 +324,9 @@ The configuration file, passed on to raspdash.
 The alacritty configuration.  By default it uses
 @file{alacritty-kiosk.toml} next to the script or in
 @file{../share/raspdash/}.
+@item RASPDASH_RESTART
+How long each raspdash runs before it is restarted (default
+@samp{3h}; @samp{0} never restarts).
 @end table
 
 It logs starts and exits to

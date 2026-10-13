@@ -11,6 +11,11 @@
 	on KEY_CLICK.
 	* doc/raspdash.texi (Keys): Document it.
 
+	Restart raspdash every 3 hours.
+	* deploy/raspdash-kiosk: Run raspdash under timeout; read
+	RASPDASH_RESTART.
+	* doc/raspdash.texi (Kiosk launcher): Document it.
+
 	* deploy/raspdash-kiosk: Wait for the window manager before starting
 	alacritty, so its full-screen request is not lost at login.
 	* doc/raspdash.texi (Kiosk launcher): Document it.

@@ -10,7 +10,7 @@
 #
 # Started from the X session (see raspdash.desktop).  Keeps the screen
 # awake, then runs raspdash inside a full-screen alacritty and restarts
-# it whenever it exits or crashes.
+# it whenever it exits or crashes, and every 3 hours.
 #
 # Environment:
 #   RASPDASH          raspdash binary          (default: next to this
@@ -19,6 +19,8 @@
 #   RASPDASH_TERM_CONFIG  alacritty config     (default: next to this script,
 #                         then $datadir/raspdash/alacritty-kiosk.toml)
 #   RASPDASH_KEEP_SCREENSAVER=1  leave xscreensaver and DPMS alone
+#   RASPDASH_RESTART  restart raspdash after this long, as timeout(1)
+#                     takes it (default: 3h; 0 never restarts)
 
 set -u
 
@@ -69,13 +71,19 @@ command -v unclutter >/dev/null 2>&1 && { unclutter -idle 1 & }
 
 export LANG=${LANG:-C.UTF-8}
 
+# Restart raspdash every few hours, so a hung or slowly failing instance
+# does not stay on screen.  raspdash quits on SIGTERM; a hung one is
+# killed two minutes later.
+restart=${RASPDASH_RESTART:-3h}
+
 while :; do
     echo "$(date -Is) starting $bin" >>"$log"
     if [ -n "$term_config" ]; then
-        alacritty --config-file "$term_config" --class raspdash -e "$bin" \
-            2>>"$log"
+        alacritty --config-file "$term_config" --class raspdash \
+            -e timeout --foreground -k 2m "$restart" "$bin" 2>>"$log"
     else
-        alacritty -o window.startup_mode=Fullscreen -e "$bin" 2>>"$log"
+        alacritty -o window.startup_mode=Fullscreen \
+            -e timeout --foreground -k 2m "$restart" "$bin" 2>>"$log"
     fi
     echo "$(date -Is) exited with status $?" >>"$log"
     sleep 3
