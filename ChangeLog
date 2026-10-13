@@ -1,3 +1,9 @@
+2026-10-13  mb6ockatf
+
+	* deploy/raspdash-kiosk: Wait for the window manager before starting
+	alacritty, so its full-screen request is not lost at login.
+	* doc/raspdash.texi (Kiosk launcher): Document it.
+
 2026-10-06  mb6ockatf
 
 	* src/machines.cpp (MachinesScreen::draw): Use two rows for three

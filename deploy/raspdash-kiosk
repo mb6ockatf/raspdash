@@ -50,6 +50,20 @@ if [ "${RASPDASH_KEEP_SCREENSAVER:-0}" != 1 ]; then
         && xscreensaver-command -exit >/dev/null 2>&1
 fi
 
+# The autostart entry runs alongside the window manager.  A window mapped
+# before the window manager runs loses its fullscreen request and stays
+# 800x600, so wait (up to 30 seconds) for an EWMH window manager.
+if command -v xprop >/dev/null 2>&1; then
+    tries=0
+    until xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null \
+            | grep -q 'window id'; do
+        tries=$((tries + 1))
+        [ "$tries" -ge 30 ] && break
+        sleep 1
+    done
+    sleep 1
+fi
+
 # Hide the mouse pointer when unclutter is installed.
 command -v unclutter >/dev/null 2>&1 && { unclutter -idle 1 & }
 

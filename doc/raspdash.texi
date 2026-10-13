@@ -294,6 +294,14 @@ so the dashboard stays visible.  Set @env{RASPDASH_KEEP_SCREENSAVER} to
 @samp{1} to keep them.  It hides the mouse pointer when
 @command{unclutter} is installed.
 
+The autostart entry starts the launcher together with the window
+manager.  A window that opens before the window manager runs loses its
+full-screen request and stays at alacritty's default 800 by 600 pixels,
+so the launcher first waits, for up to 30 seconds, until
+@command{xprop} sees an EWMH window manager on the root window
+(@samp{_NET_SUPPORTING_WM_CHECK}).  Without @command{xprop} it does not
+wait.
+
 Other variables it reads:
 
 @table @env
