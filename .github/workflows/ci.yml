@@ -1,0 +1,210 @@
+# ci.yml - build and test raspdash on every push and pull request.
+#
+# Copyright (C) 2026 mb6ockatf
+# This file is free software; see COPYING for copying conditions.
+#
+# Every job runs in the official gcc:16.2-trixie image: GCC 16.2, the
+# compiler the Pi builds raspdash with, on Debian 13, whose astyle (3.1)
+# is the one hooks/pre-commit formats with.  The build job also runs in
+# gcc:14-trixie, the oldest supported compiler (configure requires C++23
+# with <print> and std::ranges::to), and natively on an arm64 runner.
+#
+# The Pi itself runs a 32-bit armhf userland, which GitHub's arm64
+# runners cannot execute, so the armhf job cross-compiles with Debian's
+# arm-linux-gnueabihf toolchain and runs the tests under qemu-arm.
+#
+# A weekly scheduled run catches breakage from new images and packages
+# when nothing is being pushed.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_DEPENDENCIES: >-
+    autoconf automake autoconf-archive pkg-config texinfo
+    libncurses-dev libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
+
+jobs:
+  build:
+    name: Build and test (${{ matrix.image }}, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: 'gcc:16.2-trixie'
+            runner: ubuntu-24.04
+          - image: 'gcc:14-trixie'
+            runner: ubuntu-24.04
+          - image: 'gcc:16.2-trixie'
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          apt-get update
+          # shellcheck disable=SC2086 # the list is meant to split into words
+          apt-get install -y --no-install-recommends $BUILD_DEPENDENCIES
+      - name: Show the compiler
+        run: g++ --version
+      - name: Bootstrap
+        run: ./bootstrap
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          ../configure
+      - name: Build
+        run: make -C build -j"$(nproc)"
+      - name: Test
+        run: make -C build -j"$(nproc)" check
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-${{ strategy.job-index }}
+          path: |
+            build/config.log
+            build/test-suite.log
+            build/tests/*.log
+          if-no-files-found: ignore
+
+  armhf:
+    name: Cross build and test (armhf, qemu)
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the cross toolchain and armhf libraries
+        run: |
+          dpkg --add-architecture armhf
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            autoconf automake autoconf-archive make texinfo \
+            g++-arm-linux-gnueabihf qemu-user \
+            pkgconf pkgconf:armhf libstdc++6:armhf \
+            libncurses-dev:armhf libcurl4-openssl-dev:armhf \
+            libssl-dev:armhf nlohmann-json3-dev
+      - name: Show the compiler
+        run: arm-linux-gnueabihf-g++ --version
+      - name: Bootstrap
+        run: ./bootstrap
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          ../configure --build="$(../build-aux/config.guess)" --host=arm-linux-gnueabihf
+      - name: Build
+        run: make -C build -j"$(nproc)"
+      # The test programs are armhf binaries; the harness runs each one
+      # as "qemu-arm tests/test_...".
+      - name: Test
+        run: make -C build -j"$(nproc)" check LOG_COMPILER=qemu-arm
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-armhf
+          path: |
+            build/config.log
+            build/test-suite.log
+            build/tests/*.log
+          if-no-files-found: ignore
+
+  sanitizers:
+    name: AddressSanitizer and UBSan
+    runs-on: ubuntu-24.04
+    container: gcc:16.2-trixie
+    env:
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          apt-get update
+          # shellcheck disable=SC2086 # the list is meant to split into words
+          apt-get install -y --no-install-recommends $BUILD_DEPENDENCIES
+      - name: Bootstrap
+        run: ./bootstrap
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          ../configure \
+            CXXFLAGS='-g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer -D_GLIBCXX_ASSERTIONS' \
+            LDFLAGS='-fsanitize=address,undefined'
+      - name: Build
+        run: make -C build -j"$(nproc)"
+      - name: Test
+        run: make -C build -j"$(nproc)" check
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-sanitizers
+          path: |
+            build/config.log
+            build/test-suite.log
+            build/tests/*.log
+          if-no-files-found: ignore
+
+  distcheck:
+    name: Distribution check
+    runs-on: ubuntu-24.04
+    container: gcc:16.2-trixie
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          apt-get update
+          # shellcheck disable=SC2086 # the list is meant to split into words
+          apt-get install -y --no-install-recommends $BUILD_DEPENDENCIES
+      - name: Bootstrap
+        run: ./bootstrap
+      - name: Configure
+        run: ./configure
+      # The HTML manual stands in for the DVI one, so that the image
+      # needs no TeX installation.
+      - name: make distcheck
+        run: make -j"$(nproc)" distcheck AM_DISTCHECK_DVI_TARGET=html
+      - name: Upload tarball
+        uses: actions/upload-artifact@v7
+        with:
+          name: tarball
+          path: raspdash-*.tar.gz
+
+  format:
+    name: GNU style (astyle)
+    runs-on: ubuntu-24.04
+    container: gcc:16.2-trixie
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install astyle
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends astyle
+      # The same options as hooks/pre-commit; third_party/ is skipped.
+      - name: Check formatting
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          astyle --version
+          git ls-files -z '*.c' '*.h' '*.cc' '*.cpp' '*.hh' '*.hpp' \
+            ':!third_party/' \
+            | xargs -0 astyle --style=gnu --suffix=none --quiet
+          git diff --exit-code

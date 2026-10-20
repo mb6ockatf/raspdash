@@ -1,3 +1,21 @@
+2026-10-20  mb6ockatf
+
+	Add GitHub Actions workflows.
+	* .github/workflows/ci.yml: New; build and test with GCC 16.2 and
+	GCC 14, natively on arm64, and cross-compiled for armhf with the
+	tests run under qemu-arm; AddressSanitizer and UBSan; make
+	distcheck; astyle formatting.  Also runs weekly.
+	* .github/workflows/gitleaks.yml: New; scan the history for secrets.
+	* .github/workflows/lint.yml: New; shellcheck and actionlint.
+	* .github/workflows/codeql.yml: New; CodeQL analysis of the C++
+	sources.
+	* .github/workflows/release.yml: New; on a vX.Y.Z tag, check it
+	against AC_INIT, run make distcheck and attach the tarball to a
+	GitHub release.
+	* .github/workflows/pages.yml: New; publish the HTML manual on
+	GitHub Pages.
+	* .github/dependabot.yml: New; weekly updates of the actions.
+
 2026-10-13  mb6ockatf
 
 	Read mouse clicks without ncurses, which could freeze the dashboard.

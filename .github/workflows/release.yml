@@ -1,0 +1,60 @@
+# release.yml - publish a release when a version tag is pushed.
+#
+# Copyright (C) 2026 mb6ockatf
+# This file is free software; see COPYING for copying conditions.
+#
+# Pushing a tag vX.Y.Z runs 'make distcheck' and attaches the resulting
+# raspdash-X.Y.Z.tar.gz and its SHA-256 sum to a new GitHub release.  The
+# tag must match the version in AC_INIT (configure.ac).
+#
+# No binary is attached: the Pi runs Raspbian Bullseye (armhf, glibc
+# 2.31), and a binary built on a newer system would not run there.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release ${{ github.ref_name }}
+    runs-on: ubuntu-24.04
+    container: gcc:16.2-trixie
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            autoconf automake autoconf-archive pkg-config texinfo \
+            libncurses-dev libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
+      - name: Bootstrap
+        run: ./bootstrap
+      - name: Configure
+        run: ./configure
+      - name: Check the tag against the version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(./configure --version | sed -n '1s/.* //p')
+          if [ "$TAG" != "v$version" ]; then
+            echo "Tag $TAG does not match version $version in configure.ac" >&2
+            exit 1
+          fi
+      # The HTML manual stands in for the DVI one, as in ci.yml.
+      - name: make distcheck
+        run: make -j"$(nproc)" distcheck AM_DISTCHECK_DVI_TARGET=html
+      - name: Checksum
+        run: sha256sum raspdash-*.tar.gz >SHA256SUMS
+      - name: Create the release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            raspdash-*.tar.gz
+            SHA256SUMS
+          fail_on_unmatched_files: true
+          generate_release_notes: true

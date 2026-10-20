@@ -1,0 +1,64 @@
+# pages.yml - publish the HTML manual on GitHub Pages.
+#
+# Copyright (C) 2026 mb6ockatf
+# This file is free software; see COPYING for copying conditions.
+#
+# Builds 'make html' (doc/raspdash.texi, one page per node) from master
+# and deploys it.  Pages must be enabled once by hand: Settings > Pages >
+# Build and deployment > Source: GitHub Actions.
+
+name: Manual
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'doc/**'
+      - 'configure.ac'
+      - 'Makefile.am'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the manual
+    runs-on: ubuntu-24.04
+    container: gcc:16.2-trixie
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            autoconf automake autoconf-archive pkg-config texinfo \
+            libncurses-dev libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
+      - name: Bootstrap and configure
+        run: |
+          ./bootstrap
+          ./configure
+      - name: make html
+        run: make html
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: doc/raspdash.html
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

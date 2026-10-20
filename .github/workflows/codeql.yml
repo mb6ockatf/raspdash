@@ -1,0 +1,59 @@
+# codeql.yml - CodeQL security and quality analysis of the C++ sources.
+#
+# Copyright (C) 2026 mb6ockatf
+# This file is free software; see COPYING for copying conditions.
+#
+# The build is traced, so CodeQL sees exactly what the compiler sees.
+# It uses GCC 14, the oldest supported compiler, whose C++23 library
+# CodeQL's front end is most likely to parse.  Results appear under
+# Security > Code scanning.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: '41 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (C++)
+    runs-on: ubuntu-24.04
+    container: gcc:14-trixie
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            autoconf automake autoconf-archive pkg-config texinfo \
+            libncurses-dev libcurl4-openssl-dev libssl-dev nlohmann-json3-dev
+      - name: Bootstrap and configure
+        run: |
+          ./bootstrap
+          ./configure
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: c-cpp
+          build-mode: manual
+          queries: security-and-quality
+      # An empty TESTS builds the test programs without running them.
+      - name: Build
+        run: make -j"$(nproc)" check TESTS=
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:c-cpp
