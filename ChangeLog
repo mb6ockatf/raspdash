@@ -1,3 +1,14 @@
+2026-10-21  mb6ockatf
+
+	Report a command that cannot be run under qemu-user too.
+	* src/machines.cpp (find_program): New; search PATH like
+	posix_spawnp.
+	(run_command): Use fork and execve with a close-on-exec pipe that
+	carries the exec errno back, instead of posix_spawnp, whose exec
+	errors qemu-user loses (it runs the CLONE_VFORK child as a plain
+	fork), so a missing program gave status 127 instead of an
+	exception and tests/test_machines failed under qemu-arm.
+
 2026-10-20  mb6ockatf
 
 	Add GitHub Actions workflows.

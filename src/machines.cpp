@@ -25,6 +25,7 @@
 #include <atomic>
 #include <cerrno>
 #include <charconv>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <filesystem>
@@ -38,7 +39,6 @@
 
 #include <fcntl.h>
 #include <poll.h>
-#include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -298,6 +298,25 @@ make_pipe (Fd &r, Fd &w)
     r.fd = p[0];
     w.fd = p[1];
 }
+
+std::string
+find_program (const std::string &name)
+{
+    if (name.find ('/') != std::string::npos)
+        return name;
+    const char *path_env = std::getenv ("PATH");
+    std::string_view search = path_env ? path_env : "/bin:/usr/bin";
+    for (std::string_view dir : util::split (search, ':'))
+        {
+            std::string candidate = std::string (dir.empty () ? "." : dir) + "/"
+                                    + name;
+            if (::access (candidate.c_str (), X_OK) == 0
+                    && !fs::is_directory (candidate))
+                return candidate;
+        }
+    throw std::runtime_error (std::format ("cannot run {}: {}", name,
+                                           std::strerror (ENOENT)));
+}
 }
 
 CommandResult
@@ -312,24 +331,42 @@ run_command (const std::vector<std::string> &argv, std::string_view input,
     make_pipe (out_r, out_w);
     make_pipe (err_r, err_w);
 
-    posix_spawn_file_actions_t fa;
-    posix_spawn_file_actions_init (&fa);
-    posix_spawn_file_actions_adddup2 (&fa, in_r.fd, 0);
-    posix_spawn_file_actions_adddup2 (&fa, out_w.fd, 1);
-    posix_spawn_file_actions_adddup2 (&fa, err_w.fd, 2);
-
+    std::string program = find_program (argv[0]);
     std::vector<char *> cargv;
-    for (const std::string &a : argv)
-        cargv.push_back (const_cast<char *> (a.c_str ()));
+    for (const std::string &arg : argv)
+        cargv.push_back (const_cast<char *> (arg.c_str ()));
     cargv.push_back (nullptr);
 
-    pid_t pid;
-    int rc = posix_spawnp (&pid, cargv[0], &fa, nullptr, cargv.data (),
-                           environ);
-    posix_spawn_file_actions_destroy (&fa);
-    if (rc != 0)
-        throw std::runtime_error (std::format ("cannot run {}: {}", argv[0],
-                                               std::strerror (rc)));
+    Fd exec_r, exec_w;
+    make_pipe (exec_r, exec_w);
+    pid_t pid = ::fork ();
+    if (pid < 0)
+        throw std::runtime_error (std::format ("fork: {}",
+                                               std::strerror (errno)));
+    if (pid == 0)
+        {
+            if (::dup2 (in_r.fd, 0) >= 0 && ::dup2 (out_w.fd, 1) >= 0
+                    && ::dup2 (err_w.fd, 2) >= 0)
+                ::execve (program.c_str (), cargv.data (), environ);
+            int error = errno;
+            ssize_t ignored = ::write (exec_w.fd, &error, sizeof error);
+            (void) ignored;
+            ::_exit (127);
+        }
+    exec_w.reset ();
+    int exec_error = 0;
+    ssize_t got;
+    while ((got = ::read (exec_r.fd, &exec_error, sizeof exec_error)) < 0
+            && errno == EINTR)
+        ;
+    if (got > 0)
+        {
+            int status;
+            while (::waitpid (pid, &status, 0) < 0 && errno == EINTR)
+                ;
+            throw std::runtime_error (std::format ("cannot run {}: {}", argv[0],
+                                                   std::strerror (exec_error)));
+        }
     in_r.reset ();
     out_w.reset ();
     err_w.reset ();
