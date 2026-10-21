@@ -533,7 +533,7 @@ HTTP requests honour the usual @env{http_proxy}, @env{https_proxy} and
 
 Credentials and tokens go into the @file{secrets/} directory beside
 @file{config.toml}.  Git ignores everything in it except its
-@file{README.md}, so they are never committed.  Keep the files readable
+@file{README}, so they are never committed.  Keep the files readable
 only by you (@samp{chmod 600}).
 
 @table @file

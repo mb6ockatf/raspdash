@@ -32,7 +32,7 @@ Makefile.in
 # credentials and tokens: never commit
 /config.toml
 /secrets/*
-!/secrets/README.md
+!/secrets/README
 
 # generated documentation (Automake builds it in the source tree)
 /doc/raspdash.info

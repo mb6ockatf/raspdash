@@ -1,37 +1,62 @@
-raspdash
-========
+raspdash -- a terminal dashboard for a Raspberry Pi
+===================================================
 
 A full-screen terminal dashboard for a Raspberry Pi.  It shows:
 
-  1. Machines   -- load, memory and temperatures of the computers on the LAN
+  1. Machines   -- load, memory and temperatures of the computers on
+                   the LAN
   2. Uptime     -- uptime and boots of those computers, last power cut
   3. Network    -- devices on the LAN and the services they offer
   4. Tasks      -- Google Tasks lists (read-only)
   5. Timetable  -- this week's classes from ruz.spbstu.ru
   6. Weather    -- forecasts from MET Norway for configured cities
-  7-9. Markets  -- month and half-year candlestick charts (XAUT/USDT, TON/USDT;
-                   BTC/USD, USD/RUB) and a comparison chart
+  7-9. Markets  -- month and half-year candlestick charts (XAUT/USDT,
+                   TON/USDT; BTC/USD, USD/RUB) and a comparison chart
   10. XMR       -- Monero: market, 30-day chart, network, a mining
                    calculator and your own node
 
-Building from a git checkout:
-
-  ./bootstrap
-  ./configure
-  make
-  make check
+Requirements
+------------
 
 A C++23 compiler (GCC 14 or later) is required, plus ncursesw, libcurl,
-OpenSSL's libcrypto and nlohmann-json.  See INSTALL for generic
-instructions and the Texinfo manual (doc/raspdash.texi, 'info raspdash'
-once installed) for configuration and deployment on the Pi.
+OpenSSL's libcrypto and nlohmann-json.
 
-Configuration: copy config.example.toml to config.toml and edit it.
-config.toml and everything in secrets/ are personal and ignored by git.
+Building and installing
+-----------------------
+
+Building from a git checkout:
+
+    ./bootstrap
+    ./configure
+    make
+    make check
+
+See INSTALL for generic instructions.
 
 Enable the formatting hook once per clone:
 
-  git config core.hooksPath hooks
+    git config core.hooksPath hooks
 
-raspdash is free software, licensed under the GNU General Public License,
-version 3 or (at your option) any later version.  See COPYING.
+Configuration
+-------------
+
+Copy config.example.toml to config.toml and edit it.  config.toml and
+everything in secrets/ are personal and ignored by git.
+
+Documentation
+-------------
+
+The Texinfo manual (doc/raspdash.texi, "info raspdash" once installed)
+covers configuration and deployment on the Pi.
+
+Reporting bugs
+--------------
+
+Report bugs to <mdddmmmm@outlook.com>, or at
+https://github.com/mb6ockatf/raspdash/issues.
+
+Copying
+-------
+
+raspdash is free software, licensed under the GNU General Public
+License, version 3 or (at your option) any later version.  See COPYING.

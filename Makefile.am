@@ -85,6 +85,6 @@ EXTRA_DIST = \
 	bootstrap \
 	hooks/pre-commit \
 	deploy \
-	secrets/README.md \
+	secrets/README \
 	tests/data \
 	third_party/toml.hpp third_party/toml++-LICENSE
